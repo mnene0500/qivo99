@@ -20,4 +20,16 @@ export function initializeFirebase() {
   return { firebaseApp: app, firestore, auth, database };
 }
 
+export function useFirestore() {
+  return initializeFirebase().firestore;
+}
+
+export function useAuth() {
+  return initializeFirebase().auth;
+}
+
+export function useDatabase() {
+  return initializeFirebase().database;
+}
+
 export { useUser };
