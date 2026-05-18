@@ -1,3 +1,4 @@
+
 'use server';
 
 import { PESAPAL_CONFIG } from '@/lib/pesapal-config';
@@ -30,7 +31,7 @@ export async function getAccessToken(): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch PesaPal access token');
+    throw new Error('Failed to fetch PesaPal access token. Check your Consumer Key/Secret.');
   }
 
   const data = await response.json();
@@ -87,6 +88,14 @@ export async function getIpnList() {
  */
 export async function initiatePesaPalPayment(amount: number, user: { uid: string, email: string, name: string }) {
   try {
+    // CRITICAL CHECK: IPN_ID must be set for background fulfillment to work
+    if (!PESAPAL_CONFIG.IPN_ID) {
+      return { 
+        success: false, 
+        error: "System Configuration Error: PESAPAL_IPN_ID is missing. Please contact an Administrator to run diagnostics at /pesapal-admin." 
+      };
+    }
+
     const token = await getAccessToken();
     const merchantReference = `MF_${user.uid}_${Date.now()}`;
     
@@ -94,7 +103,7 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
       id: merchantReference,
       currency: "KES",
       amount: amount,
-      description: `Recharge for ${user.name}`,
+      description: `QIVO Coin Recharge for ${user.name}`,
       callback_url: PESAPAL_CONFIG.CALLBACK_URL,
       notification_id: PESAPAL_CONFIG.IPN_ID,
       billing_address: {
@@ -102,13 +111,13 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
         phone_number: "",
         country_code: "KE",
         first_name: user.name.split(' ')[0] || "User",
-        last_name: user.name.split(' ')[1] || "MatchFlow",
-        line_1: "",
+        last_name: user.name.split(' ')[1] || "QIVO",
+        line_1: "Nairobi",
         line_2: "",
         city: "Nairobi",
         state: "Nairobi",
-        postal_code: "",
-        zip_code: ""
+        postal_code: "00100",
+        zip_code: "00100"
       }
     };
 
@@ -124,7 +133,7 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
 
     if (!response.ok) {
       const errorData = await response.json();
-      return { success: false, error: errorData.message || 'Failed to submit order to PesaPal' };
+      return { success: false, error: errorData.message || 'PesaPal rejected the order request. Ensure notification_id is valid.' };
     }
 
     const data = await response.json();
