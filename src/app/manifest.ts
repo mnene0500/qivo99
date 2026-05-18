@@ -2,23 +2,26 @@ import type { MetadataRoute } from 'next'
  
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'QIVO - Connect with Heart',
+    name: 'QIVO',
     short_name: 'QIVO',
-    description: 'A premium social platform for meaningful connections.',
+    description: 'Connect with Heart',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
+    background_color: '#000000',
     theme_color: '#00A2FF',
+    orientation: 'portrait',
     icons: [
       {
-        src: 'https://picsum.photos/seed/qivo-icon-192/192/192',
+        src: 'https://picsum.photos/seed/matchflow-icon/192/192',
         sizes: '192x192',
         type: 'image/png',
+        purpose: 'any maskable',
       },
       {
-        src: 'https://picsum.photos/seed/qivo-icon-512/512/512',
+        src: 'https://picsum.photos/seed/matchflow-icon/512/512',
         sizes: '512x512',
         type: 'image/png',
+        purpose: 'any maskable',
       },
     ],
   }
