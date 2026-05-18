@@ -1,4 +1,3 @@
-
 'use server';
 
 import { PESAPAL_CONFIG } from '@/lib/pesapal-config';
@@ -88,7 +87,6 @@ export async function getIpnList() {
  */
 export async function initiatePesaPalPayment(amount: number, user: { uid: string, email: string, name: string }) {
   try {
-    // CRITICAL CHECK: IPN_ID must be set for background fulfillment to work
     if (!PESAPAL_CONFIG.IPN_ID) {
       return { 
         success: false, 
@@ -97,7 +95,8 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
     }
 
     const token = await getAccessToken();
-    const merchantReference = `MF_${user.uid}_${Date.now()}`;
+    // Using QV prefix for QIVO
+    const merchantReference = `QV_${user.uid}_${Date.now()}`;
     
     const payload = {
       id: merchantReference,
@@ -133,7 +132,7 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
 
     if (!response.ok) {
       const errorData = await response.json();
-      return { success: false, error: errorData.message || 'PesaPal rejected the order request. Ensure notification_id is valid.' };
+      return { success: false, error: errorData.message || 'PesaPal rejected the order request.' };
     }
 
     const data = await response.json();

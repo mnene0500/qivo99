@@ -18,21 +18,19 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. Verify transaction status with PesaPal API
     const status = await getTransactionStatus(orderTrackingId);
     
-    // Status Code 1 = Completed/Success in PesaPal v3
+    // Status Code 1 = Completed/Success
     if (status && status.status_code === 1) {
       const { database: rtdb } = initializeFirebase();
       
-      // MerchantReference format: MF_{uid}_{timestamp}
+      // Reference format: QV_{uid}_{timestamp} or legacy MF_{uid}_{timestamp}
       const parts = merchantReference.split('_');
       const uid = parts[1];
       const amount = status.amount;
 
       if (!uid) throw new Error("Could not extract UID from reference");
 
-      // 2. Avoid duplicate fulfillment
       const processedRef = ref(rtdb, `processed_payments/${orderTrackingId}`);
       const alreadyProcessed = await get(processedRef);
       
@@ -40,7 +38,6 @@ export async function GET(request: Request) {
         return NextResponse.json({ OrderTrackingId: orderTrackingId, status: 'Already Processed' });
       }
 
-      // 3. Map KES amount to Coins
       let coinsToAward = 0;
       if (amount >= 1800) coinsToAward = 20000;
       else if (amount >= 1000) coinsToAward = 10000;
@@ -48,18 +45,16 @@ export async function GET(request: Request) {
       else if (amount >= 230) coinsToAward = 2000;
       else if (amount >= 120) coinsToAward = 1000;
       else if (amount >= 80) coinsToAward = 500;
-      else if (amount >= 1) coinsToAward = 200; // Test package
+      else if (amount >= 1) coinsToAward = 200;
 
       if (coinsToAward > 0) {
         const timestamp = Date.now();
         
-        // Award Coins
         await update(ref(rtdb, `balances/${uid}`), {
           coins: increment(coinsToAward),
           updatedAt: timestamp
         });
 
-        // Log History
         await set(push(ref(rtdb, `coin_history/${uid}`)), {
           amount: coinsToAward,
           type: 'recharge',
@@ -67,7 +62,6 @@ export async function GET(request: Request) {
           timestamp
         });
 
-        // Mark as processed
         await set(processedRef, {
           uid,
           amount,
@@ -79,7 +73,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // PesaPal expects a JSON response with the order tracking ID
     return NextResponse.json({
       OrderTrackingId: orderTrackingId,
       status: 'OK'

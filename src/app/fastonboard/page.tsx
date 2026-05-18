@@ -29,7 +29,6 @@ export default function FastOnboardingPage() {
 
   const generateRandomDOB = () => {
     const currentYear = new Date().getFullYear();
-    // Random age between 21 and 50
     const age = Math.floor(Math.random() * 30) + 21; 
     const year = currentYear - age;
     const month = Math.floor(Math.random() * 12);
@@ -37,7 +36,7 @@ export default function FastOnboardingPage() {
     return new Date(year, month, day).toISOString().split('T')[0];
   }
 
-  const generateMatchFlowId = () => {
+  const generateQivoId = () => {
     const min = 1000000; 
     const max = 999999999; 
     return Math.floor(Math.random() * (max - min + 1) + min).toString();
@@ -52,18 +51,17 @@ export default function FastOnboardingPage() {
       const userSnap = await getDoc(userRef)
       const existingData = userSnap.data()
 
-      const mId = existingData?.matchFlowId || generateMatchFlowId()
-      const finalName = `Guest ${mId.slice(-4)}`
+      const qId = existingData?.matchFlowId || generateQivoId()
+      const finalName = `Guest ${qId.slice(-4)}`
       const finalDob = generateRandomDOB()
 
-      // Initial balances for new users
       const initialCoins = gender === 'male' ? 150 : 0
       const initialDiamonds = gender === 'female' ? 150 : 0
       const timestamp = Date.now()
 
       const updateData: any = {
         uid: user.uid,
-        email: user.email || `anon_${user.uid}@matchflow.app`,
+        email: user.email || `anon_${user.uid}@qivo.app`,
         name: finalName,
         gender,
         dob: finalDob,
@@ -73,7 +71,7 @@ export default function FastOnboardingPage() {
         photoURL: `https://picsum.photos/seed/${user.uid}/400/400`,
         updatedAt: serverTimestamp(),
         createdAt: existingData?.createdAt || serverTimestamp(),
-        matchFlowId: mId,
+        matchFlowId: qId,
         isDeleted: false,
         isVerified: false,
         isAdmin: false,
@@ -84,7 +82,6 @@ export default function FastOnboardingPage() {
 
       await setDoc(userRef, updateData, { merge: true })
       
-      // Initialize balances in RTDB
       const balanceRef = ref(rtdb, `balances/${user.uid}`)
       await rtdbSet(balanceRef, {
         coins: initialCoins,
@@ -92,7 +89,6 @@ export default function FastOnboardingPage() {
         updatedAt: timestamp
       })
 
-      // Log welcome bonus
       if (initialCoins > 0) {
         await push(ref(rtdb, `coin_history/${user.uid}`), {
           amount: initialCoins,
@@ -127,16 +123,11 @@ export default function FastOnboardingPage() {
         <div className="w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center mb-6">
           <Heart className="w-8 h-8 text-[#00A2FF] fill-current" />
         </div>
-        
-        <div className="flex gap-1.5 mb-2">
-          <div className="h-1.5 rounded-full w-8 bg-[#00A2FF]" />
-        </div>
-        
         <h1 className="text-2xl font-black text-black tracking-tight mt-4 text-center">
           Instant Setup
         </h1>
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-          One more step
+          Complete your profile
         </p>
       </header>
 
@@ -178,13 +169,6 @@ export default function FastOnboardingPage() {
               </Select>
             </div>
           </div>
-          
-          <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-3">
-            <Globe className="w-5 h-5 text-[#00A2FF] shrink-0 mt-0.5" />
-            <p className="text-[10px] font-medium text-[#00A2FF]/80 leading-relaxed">
-              Fast setup gets you matched in seconds. You can customize your full profile later in the Me tab.
-            </p>
-          </div>
         </div>
       </main>
 
@@ -194,11 +178,7 @@ export default function FastOnboardingPage() {
           onClick={handleComplete}
           className="flex-1 h-16 rounded-2xl bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black uppercase tracking-widest shadow-lg shadow-blue-100 active:scale-95 transition-all"
         >
-          {loading ? (
-            <Loader2 className="w-6 h-6 animate-spin" />
-          ) : (
-            "Get Started"
-          )}
+          {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Get Started"}
         </Button>
       </footer>
     </div>

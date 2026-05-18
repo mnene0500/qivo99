@@ -1,4 +1,3 @@
-
 # PesaPal v3 LIVE Integration Guide for QIVO
 
 This guide is specific to your production domain: **qivo-gamma.vercel.app**.
@@ -13,7 +12,7 @@ Add the following variables exactly as shown to your Vercel project environment:
 | `PESAPAL_API_BASE_URL` | `https://pay.pesapal.com/v3` |
 | `PESAPAL_IPN_URL` | `https://qivo-gamma.vercel.app/api/pesapal/callback` |
 | `PESAPAL_CALLBACK_URL` | `https://qivo-gamma.vercel.app/recharge` |
-| `PESAPAL_IPN_ID` | *To be retrieved in Step 2* |
+| `PESAPAL_IPN_ID` | *Retrieved in Step 2* |
 
 ## 2. Registering your Live IPN (The "IPN ID")
 Once you have added the first 5 variables and redeployed:
@@ -24,5 +23,5 @@ Once you have added the first 5 variables and redeployed:
 5. Copy that ID and add it to Vercel as `PESAPAL_IPN_ID`.
 6. **Redeploy one last time.**
 
-## 3. Testing
-You can now use the "Test Package" (KES 1.00) in the Recharge screen to verify that coins are added to your account instantly via M-Pesa.
+## 3. Deployment Check
+Ensure your merchant reference prefix is set to `QV_` in `payment-actions.ts` (Already done). This helps identify QIVO transactions in your PesaPal dashboard.
