@@ -9,6 +9,7 @@ import { doc, getDoc } from "firebase/firestore"
 import { useAuth, useUser, useFirestore } from "@/firebase"
 import Image from "next/image"
 import Link from "next/link"
+import { useToast } from "@/hooks/use-toast"
 
 /**
  * @fileOverview Welcome / Auth Entry Page.
@@ -21,6 +22,7 @@ export default function WelcomePage() {
   const db = useFirestore()
   const { user, loading: authLoading, isInitialized } = useUser()
   const router = useRouter()
+  const { toast } = useToast()
 
   useEffect(() => {
     setMounted(true)
@@ -54,7 +56,17 @@ export default function WelcomePage() {
       await signInWithPopup(auth, provider)
       // Redirection is handled by the intelligent useEffect above
     } catch (error: any) {
-      console.error("Google Sign-In Error:", error)
+      // Handle the case where the user closes the popup manually
+      if (error.code === 'auth/popup-closed-by-user') {
+        // Reset state silently as this is expected user behavior
+      } else {
+        console.error("Google Sign-In Error:", error)
+        toast({
+          variant: "destructive",
+          title: "Sign-In Error",
+          description: error.message || "Failed to authenticate with Google."
+        })
+      }
       setLoading(false)
     }
   }
