@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation"
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"
 import { doc, getDoc } from "firebase/firestore"
 import { useAuth, useUser, useFirestore } from "@/firebase"
-import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 
@@ -78,16 +77,17 @@ export default function WelcomePage() {
 
   return (
     <div className="relative flex-1 flex flex-col min-h-screen bg-black overflow-hidden select-none">
-      {/* Cinematic Background */}
-      <div className="absolute inset-0 z-0 scale-105 animate-pulse-slow">
-        <Image 
-          src="https://picsum.photos/seed/matchlove/1000/1500" 
-          alt="Welcome" 
-          fill 
-          className="object-cover opacity-70"
-          data-ai-hint="couple romance"
-          priority
-        />
+      {/* Cinematic Video Background */}
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover opacity-60 scale-105"
+        >
+          <source src="/backgroundvideo.mp4" type="video/mp4" />
+        </video>
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent" />
       </div>
