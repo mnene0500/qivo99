@@ -1,13 +1,11 @@
 'use client';
 
 import React from 'react';
-import { initializeFirebase, FirebaseClientProvider } from '@/firebase';
+import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 import { Toaster } from "@/components/ui/toaster";
 import { usePresence } from '@/hooks/use-presence';
 import { InstallPrompt } from '@/components/layout/InstallPrompt';
-
-const { firebaseApp, firestore, auth, database } = initializeFirebase();
 
 /**
  * Handles global user presence heartbeat.
@@ -19,18 +17,14 @@ function PresenceManager({ children }: { children: React.ReactNode }) {
 
 /**
  * Root providers wrapper for the application.
+ * Composes Firebase, Presence, UI notifications, and PWA prompts.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <FirebaseClientProvider 
-      firebaseApp={firebaseApp} 
-      firestore={firestore} 
-      auth={auth} 
-      database={database}
-    >
+    <FirebaseClientProvider>
       <FirebaseErrorListener />
       <PresenceManager>
-        <div className="native-page-transition flex-1 flex flex-col min-h-screen">
+        <div className="native-page-transition flex-1 flex flex-col">
           {children}
         </div>
         <Toaster />
