@@ -31,6 +31,13 @@ export async function uploadBase64Image(base64: string, bucket: string, path: st
     const mimeType = matches[1];
     const base64Data = matches[2];
 
+    // Ensure path has the correct extension based on MIME type
+    let finalPath = path;
+    if (!path.includes('.')) {
+      const ext = mimeType.includes('png') ? 'png' : 'jpg';
+      finalPath = `${path}.${ext}`;
+    }
+
     // 2. Convert to binary Blob
     const byteCharacters = atob(base64Data);
     const byteNumbers = new Array(byteCharacters.length);
@@ -41,10 +48,9 @@ export async function uploadBase64Image(base64: string, bucket: string, path: st
     const blob = new Blob([byteArray], { type: mimeType });
 
     // 3. Upload to Supabase
-    // Note: If you get an RLS error, ensure your bucket policies allow Public 'INSERT' and 'SELECT'
     const { error } = await supabase.storage
       .from(bucket)
-      .upload(path, blob, {
+      .upload(finalPath, blob, {
         contentType: mimeType,
         upsert: true,
       });
@@ -57,7 +63,7 @@ export async function uploadBase64Image(base64: string, bucket: string, path: st
     // 4. Retrieve and return the public URL
     const { data: { publicUrl } } = supabase.storage
       .from(bucket)
-      .getPublicUrl(path);
+      .getPublicUrl(finalPath);
 
     return publicUrl;
   } catch (err: any) {

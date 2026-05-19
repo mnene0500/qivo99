@@ -177,7 +177,6 @@ function ChatsContent() {
         const list = Object.entries(data)
           .map(([id, val]: [string, any]) => ({ id, ...val } as ChatSummary))
           .filter(summary => {
-            // Only show chats with a real message that is newer than the deletion date
             const hasActualMessage = summary.lastMessage && 
                                    summary.lastMessage.trim() !== "" && 
                                    summary.lastMessage !== "Start talking...";
@@ -378,7 +377,6 @@ function ChatsContent() {
     if (!currentUser?.uid || !chatToDelete || !rtdb) return
     try {
       const now = Date.now()
-      // Mark as deleted and reset lastMessage so it disappears from the list
       await update(ref(rtdb, `user_chats/${currentUser.uid}/${chatToDelete.id}`), {
         lastMessage: "",
         unreadCount: 0,
