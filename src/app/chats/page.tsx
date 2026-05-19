@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, Suspense, useMemo, useRef } from "react"
@@ -303,10 +304,8 @@ function ChatsContent() {
       return;
     }
 
-    if (partnerPresence?.state !== 'online') {
-      toast({ title: "User Offline", description: "This user isn't online right now." })
-      return
-    }
+    // REMOVED: Strict online check to allow calling even if presence is pending
+    // if (partnerPresence?.state !== 'online') { ... }
 
     const callData = {
       callerId: currentUser.uid,
