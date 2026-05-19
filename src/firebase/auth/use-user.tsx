@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from 'react';
@@ -13,19 +12,24 @@ export function useUser() {
   useEffect(() => {
     const { auth } = initializeFirebase();
     
-    // Safety guard: If auth is null (config missing), just mark as initialized and exit
     if (!auth) {
       setLoading(false);
       setIsInitialized(true);
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    try {
+      const unsubscribe = onAuthStateChanged(auth, (u) => {
+        setUser(u);
+        setLoading(false);
+        setIsInitialized(true);
+      });
+      return () => unsubscribe();
+    } catch (err) {
+      console.error("[useUser] Auth listener failed:", err);
       setLoading(false);
       setIsInitialized(true);
-    });
-    return () => unsubscribe();
+    }
   }, []);
 
   return { user, loading, isInitialized };

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
@@ -16,55 +15,43 @@ import { useMemo } from 'react';
  * Returns null for services if the configuration is missing to prevent hard crashes.
  */
 export function initializeFirebase() {
-  // Check for the absolute minimum required key
-  const apiKey = firebaseConfig.apiKey || process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  const apiKey = firebaseConfig.apiKey || (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_API_KEY : undefined);
   const isConfigValid = !!(apiKey && apiKey !== 'undefined');
   
+  const nullResult = { 
+    firebaseApp: null as unknown as FirebaseApp, 
+    firestore: null as unknown as Firestore, 
+    auth: null as unknown as Auth, 
+    database: null as unknown as Database 
+  };
+
   if (!isConfigValid) {
-    if (typeof window !== 'undefined') {
-      console.warn("QIVO: Firebase configuration is missing or invalid. Check Vercel Env Vars.");
-    } else {
-      console.error("[Firebase Server] API Key missing. Service actions will fail.");
-    }
-    return { 
-      firebaseApp: null as unknown as FirebaseApp, 
-      firestore: null as unknown as Firestore, 
-      auth: null as unknown as Auth, 
-      database: null as unknown as Database 
-    };
+    return nullResult;
   }
 
-  let app: FirebaseApp;
   try {
+    let app: FirebaseApp;
     if (getApps().length === 0) {
       app = initializeApp(firebaseConfig);
     } else {
       app = getApp();
     }
     
+    // Some environments (like build time) might allow app init but fail service init
     const firestore = getFirestore(app);
     const auth = getAuth(app);
     const database = getDatabase(app);
 
     return { firebaseApp: app, firestore, auth, database };
   } catch (err: any) {
-    console.error("[Firebase Init Error]:", err.message);
-    return { 
-      firebaseApp: null as unknown as FirebaseApp, 
-      firestore: null as unknown as Firestore, 
-      auth: null as unknown as Auth, 
-      database: null as unknown as Database 
-    };
+    console.warn("[Firebase Init Warning]:", err.message);
+    return nullResult;
   }
 }
 
-// Re-export provider and hooks
 export * from './provider';
 export { FirebaseClientProvider } from './client-provider';
 
-/**
- * Memoize Firebase references to prevent unnecessary re-renders.
- */
 export function useMemoFirebase<T>(factory: () => T, deps: any[]): T {
   return useMemo(factory, deps);
 }

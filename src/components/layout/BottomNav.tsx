@@ -18,20 +18,24 @@ export function BottomNav() {
   const rtdb = useDatabase()
   const [totalUnread, setTotalUnread] = useState(0)
 
-  // REAL-TIME UNREAD SYNC: Listen to all user chat summaries to calculate total badge count
   useEffect(() => {
-    if (!user?.uid) return
-    const unreadRef = ref(rtdb, `user_chats/${user.uid}`)
-    const unsubscribe = onValue(unreadRef, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        const total = Object.values(data).reduce((acc: number, val: any) => acc + (Number(val.unreadCount) || 0), 0)
-        setTotalUnread(total)
-      } else {
-        setTotalUnread(0)
-      }
-    })
-    return () => off(unreadRef, 'value', unsubscribe)
+    if (!user?.uid || !rtdb) return
+    
+    try {
+      const unreadRef = ref(rtdb, `user_chats/${user.uid}`)
+      const unsubscribe = onValue(unreadRef, (snapshot) => {
+        const data = snapshot.val()
+        if (data) {
+          const total = Object.values(data).reduce((acc: number, val: any) => acc + (Number(val.unreadCount) || 0), 0)
+          setTotalUnread(total)
+        } else {
+          setTotalUnread(0)
+        }
+      })
+      return () => off(unreadRef, 'value', unsubscribe)
+    } catch (err) {
+      console.warn("[BottomNav] Unread counter failed:", err)
+    }
   }, [rtdb, user?.uid])
 
   const navItems = [
@@ -43,7 +47,6 @@ export function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-t h-16 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_20px_rgba(0,0,0,0.05)]">
       {navItems.map((item) => {
-        // Match active state for direct paths or sub-paths
         const isActive = pathname === item.href || (item.href === '/chats' && pathname?.startsWith('/chats'))
         
         return (
@@ -55,25 +58,18 @@ export function BottomNav() {
               isActive ? "text-black" : "text-gray-400"
             )}
           >
-            {/* Icon Container with Lime Highlight */}
             <div className={cn(
               "relative p-1.5 rounded-2xl flex items-center justify-center transition-all duration-300",
               isActive && "bg-[#D4FF00] shadow-sm scale-110"
             )}>
               <item.icon className={cn("w-6 h-6", isActive ? "text-black fill-current" : "text-gray-400")} />
-              
-              {/* Notification Badge */}
               {item.badge !== undefined && item.badge > 0 && (
                 <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white animate-in zoom-in">
                   {item.badge > 9 ? '9+' : item.badge}
                 </div>
               )}
             </div>
-            
-            <span className={cn(
-              "text-[9px] font-black uppercase tracking-tight mt-0.5",
-              isActive ? "text-black opacity-100" : "text-gray-400 opacity-60"
-            )}>
+            <span className={cn("text-[9px] font-black uppercase tracking-tight mt-0.5", isActive ? "text-black opacity-100" : "text-gray-400 opacity-60")}>
               {item.label}
             </span>
           </Link>

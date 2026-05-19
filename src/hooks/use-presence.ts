@@ -11,28 +11,30 @@ export function usePresence() {
   const db = useDatabase()
 
   useEffect(() => {
-    if (!user?.uid) return
+    if (!user?.uid || !db) return
     
-    const myPresenceRef = ref(db, `presence/${user.uid}`)
-    const connectedRef = ref(db, '.info/connected')
+    try {
+      const myPresenceRef = ref(db, `presence/${user.uid}`)
+      const connectedRef = ref(db, '.info/connected')
 
-    const unsubscribe = onValue(connectedRef, (snap) => {
-      if (snap.val() === true) {
-        // When disconnected, set state to offline
-        onDisconnect(myPresenceRef).set({
-          state: 'offline',
-          lastChanged: serverTimestamp()
-        })
-        
-        // Set state to online when connected
-        set(myPresenceRef, {
-          state: 'online',
-          lastChanged: serverTimestamp()
-        })
-      }
-    })
+      const unsubscribe = onValue(connectedRef, (snap) => {
+        if (snap.val() === true) {
+          onDisconnect(myPresenceRef).set({
+            state: 'offline',
+            lastChanged: serverTimestamp()
+          })
+          
+          set(myPresenceRef, {
+            state: 'online',
+            lastChanged: serverTimestamp()
+          })
+        }
+      })
 
-    return () => unsubscribe()
+      return () => unsubscribe()
+    } catch (err) {
+      console.warn("[usePresence] Failed to initialize presence:", err)
+    }
   }, [db, user?.uid])
 }
 
@@ -44,16 +46,21 @@ export function useUserPresence(userId?: string) {
   const db = useDatabase()
 
   useEffect(() => {
-    if (!userId) return
-    const presenceRef = ref(db, `presence/${userId}`)
-    const unsubscribe = onValue(presenceRef, (snap) => {
-      if (snap.exists()) {
-        setPresence(snap.val())
-      } else {
-        setPresence({ state: 'offline', lastChanged: Date.now() })
-      }
-    })
-    return () => off(presenceRef, 'value', unsubscribe)
+    if (!userId || !db) return
+    
+    try {
+      const presenceRef = ref(db, `presence/${userId}`)
+      const unsubscribe = onValue(presenceRef, (snap) => {
+        if (snap.exists()) {
+          setPresence(snap.val())
+        } else {
+          setPresence({ state: 'offline', lastChanged: Date.now() })
+        }
+      })
+      return () => off(presenceRef, 'value', unsubscribe)
+    } catch (err) {
+      setPresence({ state: 'offline', lastChanged: Date.now() })
+    }
   }, [db, userId])
 
   return presence
