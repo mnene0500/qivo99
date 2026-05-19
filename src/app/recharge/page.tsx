@@ -13,10 +13,11 @@ import {
   History, 
   Users, 
   ArrowRight,
+  CheckCircle2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { initiatePesaPalPayment } from "@/app/actions/payment-actions"
+import { initiatePesaPalPayment, fulfillPaymentAction } from "@/app/actions/payment-actions"
 import {
   Dialog,
   DialogContent,
@@ -32,7 +33,7 @@ function CoinIcon({ className }: { className?: string }) {
 }
 
 const PACKAGES = [
-  { amount: 200, price: 1.0 }, // Test Package
+  { amount: 200, price: 1.0 }, 
   { amount: 500, price: 80.0 },
   { amount: 1000, price: 120.0 },
   { amount: 2000, price: 230.0 },
@@ -52,8 +53,8 @@ function RechargeContent() {
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
+  const [isFulfilling, setIsFulfilling] = useState(false)
   
-  // Instant initial balance from cache
   const [currentCoins, setCurrentCoins] = useState(() => {
     if (typeof window !== 'undefined' && user?.uid) {
       const cached = localStorage.getItem(`balance_cache_${user.uid}`)
@@ -71,13 +72,36 @@ function RechargeContent() {
   const userRef = useMemoFirebase(() => user?.uid ? doc(db, "users", user.uid) : null, [db, user?.uid])
   const { data: profile } = useDoc<any>(userRef)
 
-  // Redirect to Profile if returning from payment
+  // INSTANT FULFILLMENT ON REDIRECT
   useEffect(() => {
-    if (searchParams.get("OrderTrackingId")) {
-      toast({ title: "Recharge Processed", description: "Returning you to Profile." })
-      router.replace("/profile")
+    const orderId = searchParams.get("OrderTrackingId");
+    const merchantRef = searchParams.get("OrderMerchantReference");
+    
+    if (orderId && merchantRef) {
+      const runFulfillment = async () => {
+        setIsFulfilling(true);
+        try {
+          const res = await fulfillPaymentAction(orderId, merchantRef);
+          if (res.success) {
+            toast({ 
+              title: "Payment Successful", 
+              description: `Successfully credited ${res.coins || 'your'} coins!`,
+            });
+            // Give it a moment for RTDB sync then go to profile
+            setTimeout(() => router.replace("/profile"), 2000);
+          } else {
+            // Still redirect but maybe it's still processing in background
+            router.replace("/profile");
+          }
+        } catch (e) {
+          router.replace("/profile");
+        } finally {
+          setIsFulfilling(false);
+        }
+      };
+      runFulfillment();
     }
-  }, [searchParams, router, toast])
+  }, [searchParams, router, toast]);
 
   // REAL-TIME BALANCE LISTENER
   useEffect(() => {
@@ -118,6 +142,22 @@ function RechargeContent() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (isFulfilling) {
+    return (
+      <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-8 animate-in fade-in duration-500">
+        <div className="relative">
+          <div className="w-24 h-24 border-4 border-blue-50 rounded-full" />
+          <div className="w-24 h-24 border-4 border-[#00A2FF] border-t-transparent rounded-full animate-spin absolute inset-0" />
+          <CheckCircle2 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 text-[#00A2FF] opacity-20" />
+        </div>
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-black text-black uppercase tracking-tighter">Confirming...</h2>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] animate-pulse">Syncing with PesaPal Secure API</p>
+        </div>
+      </div>
+    )
   }
 
   return (

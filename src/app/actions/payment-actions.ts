@@ -1,6 +1,8 @@
 'use server';
 
 import { PESAPAL_CONFIG } from '@/lib/pesapal-config';
+import { initializeFirebase } from '@/firebase';
+import { ref, update, increment, push, set, get } from 'firebase/database';
 
 /**
  * @fileOverview PesaPal integration actions for API v3.
@@ -159,7 +161,6 @@ export async function getTransactionStatus(orderTrackingId: string): Promise<Tra
     if (!response.ok) return null;
     
     const data = await response.json();
-    // Normalize data to a clean response object
     return {
       amount: Number(data.amount || 0),
       currency: data.currency || 'KES',
@@ -169,5 +170,70 @@ export async function getTransactionStatus(orderTrackingId: string): Promise<Tra
   } catch (error) {
     console.error("[PesaPal] Status Fetch Error:", error);
     return null;
+  }
+}
+
+/**
+ * Securely fulfills a payment by checking status and updating RTDB.
+ * Used for both IPN and direct redirect checks.
+ */
+export async function fulfillPaymentAction(orderTrackingId: string, merchantReference: string) {
+  try {
+    const status = await getTransactionStatus(orderTrackingId);
+    
+    // Status Code 1 = Completed/Success
+    if (status && (Number(status.status_code) === 1)) {
+      const { database: rtdb } = initializeFirebase();
+      
+      const parts = merchantReference.split('_');
+      const uid = parts[1];
+      const amount = Number(status.amount);
+
+      if (!uid) return { success: false, error: "Invalid Reference" };
+
+      // Check if already processed
+      const processedRef = ref(rtdb, `processed_payments/${orderTrackingId}`);
+      const snap = await get(processedRef);
+      if (snap.exists()) return { success: true, message: "Already fulfilled" };
+
+      // Map amount to coins
+      let coinsToAward = 0;
+      if (amount >= 1800) coinsToAward = 20000;
+      else if (amount >= 1000) coinsToAward = 10000;
+      else if (amount >= 550) coinsToAward = 5000;
+      else if (amount >= 230) coinsToAward = 2000;
+      else if (amount >= 120) coinsToAward = 1000;
+      else if (amount >= 80) coinsToAward = 500;
+      else if (amount >= 0.5) coinsToAward = 200; // Test package
+
+      if (coinsToAward > 0) {
+        const timestamp = Date.now();
+        const updates: any = {};
+        updates[`balances/${uid}/coins`] = increment(coinsToAward);
+        updates[`balances/${uid}/updatedAt`] = timestamp;
+        updates[`processed_payments/${orderTrackingId}`] = {
+          uid,
+          amount,
+          coins: coinsToAward,
+          timestamp,
+          payment_method: status.payment_method || 'pesapal'
+        };
+
+        await update(ref(rtdb), updates);
+
+        // Record History
+        await set(push(ref(rtdb, `coin_history/${uid}`)), {
+          amount: coinsToAward,
+          type: 'recharge',
+          description: `PesaPal Recharge: KES ${amount}`,
+          timestamp
+        });
+
+        return { success: true, coins: coinsToAward };
+      }
+    }
+    return { success: false, error: "Payment not completed yet" };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 }
