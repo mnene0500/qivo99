@@ -3,29 +3,25 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Mail, Loader2, AlertCircle, ArrowRight } from "lucide-react"
+import { Mail, Loader2, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"
-import { doc } from "firebase/firestore"
-import { useAuth, useUser, useFirestore, useDoc } from "@/firebase"
+import { useAuth, useUser } from "@/firebase"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 
 /**
  * @fileOverview Welcome / Auth Entry Page.
- * Automatically redirects authenticated users.
+ * Optimized to redirect users immediately upon authentication.
  */
 export default function WelcomePage() {
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(false)
   
   const auth = useAuth()
-  const db = useFirestore()
   const { user, loading: authLoading, isInitialized } = useUser()
   const router = useRouter()
   const { toast } = useToast()
-
-  const { data: profile, loading: profileLoading } = useDoc<any>(user?.uid && db ? doc(db, "users", user.uid) : null)
 
   useEffect(() => {
     setMounted(true)
@@ -33,20 +29,16 @@ export default function WelcomePage() {
 
   // Auto-redirect if user is logged in
   useEffect(() => {
-    // Wait until both Auth and Profile (if user exists) are checked
-    if (isInitialized && !authLoading && !profileLoading && user) {
-      if (profile) {
-        if (profile.onboardingComplete) {
-          router.replace("/home")
-        } else {
-          router.replace(user.isAnonymous ? "/fastonboard" : "/onboarding")
-        }
+    if (isInitialized && !authLoading && user) {
+      // Send authenticated users to Home. 
+      // Home will handle the onboarding check if the profile is missing.
+      if (user.isAnonymous) {
+        router.replace("/fastonboard")
       } else {
-        // User exists in Auth but not in Firestore yet (New Google User)
-        router.replace("/onboarding")
+        router.replace("/home")
       }
     }
-  }, [user, isInitialized, authLoading, profile, profileLoading, router])
+  }, [user, isInitialized, authLoading, router])
 
   const handleGoogleLogin = async () => {
     if (!auth) {
@@ -62,7 +54,7 @@ export default function WelcomePage() {
     try {
       const provider = new GoogleAuthProvider()
       await signInWithPopup(auth, provider)
-      // Redirect is handled by the useEffect above
+      // Redirection is handled by the useEffect above
     } catch (error: any) {
       if (error.code !== 'auth/popup-closed-by-user') {
         toast({
@@ -76,7 +68,7 @@ export default function WelcomePage() {
     }
   }
 
-  if (!mounted || authLoading || !isInitialized || (user && profileLoading)) {
+  if (!mounted || authLoading || !isInitialized || (user)) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
         <Loader2 className="w-10 h-10 animate-spin text-[#00A2FF]" />
