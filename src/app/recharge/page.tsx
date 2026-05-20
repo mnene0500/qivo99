@@ -42,7 +42,6 @@ function RechargeContent() {
   const rtdb = useDatabase()
   const { toast } = useToast()
   
-  // Set to null so no package is auto-selected
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null)

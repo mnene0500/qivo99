@@ -26,6 +26,9 @@ interface UserProfile {
   blockedBy?: string[]
 }
 
+// Module-level cache to persist users across navigation during the session
+let globalUserCache: UserProfile[] = [];
+
 function calculateAge(dob: string) {
   if (!dob) return 22
   const birthDate = new Date(dob)
@@ -42,8 +45,8 @@ export default function HomePage() {
   const db = useFirestore()
   
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [users, setUsers] = useState<UserProfile[]>([])
-  const [initialLoading, setInitialLoading] = useState(true)
+  const [users, setUsers] = useState<UserProfile[]>(globalUserCache)
+  const [initialLoading, setInitialLoading] = useState(globalUserCache.length === 0)
   const [displayLimit, setDisplayLimit] = useState(12)
   const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>('Recommend')
 
@@ -52,8 +55,6 @@ export default function HomePage() {
   [db, currentUser?.uid])
   
   const { data: profile, loading: profileLoading } = useDoc<UserProfile>(currentUserProfileRef)
-
-  const hasLoadedRef = useRef(false)
 
   useEffect(() => {
     if (isInitialized && !authLoading) {
@@ -67,21 +68,26 @@ export default function HomePage() {
 
   const fetchUsers = useCallback(async (isManual = false) => {
     if (!db || !profile || !currentUser?.uid) return
-    // STATE PRESERVATION: If we already have users and it's not a manual refresh, don't re-fetch
+    
+    // Only fetch if it's a manual refresh or if the cache is empty
     if (!isManual && users.length > 0) {
       setInitialLoading(false)
       return
     }
     
     if (isManual) setIsRefreshing(true)
+    else setInitialLoading(true)
+
     try {
       const q = query(collection(db, "users"), where("onboardingComplete", "==", true), limit(40))
       const snap = await getDocs(q)
       const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile))
       const blockedList = [...(profile?.blocking || []), ...(profile?.blockedBy || [])]
       const filtered = fetched.filter(u => u.uid !== currentUser?.uid && !blockedList.includes(u.uid))
-      setUsers(filtered.sort(() => Math.random() - 0.5))
-      hasLoadedRef.current = true
+      
+      const shuffled = filtered.sort(() => Math.random() - 0.5)
+      setUsers(shuffled)
+      globalUserCache = shuffled; // Update cache
     } catch (err) {
       console.error(err)
     } finally {
@@ -92,10 +98,13 @@ export default function HomePage() {
 
   useEffect(() => {
     if (isInitialized && !authLoading && db && currentUser && profile?.onboardingComplete) {
-      if (!hasLoadedRef.current) fetchUsers()
-      else setInitialLoading(false)
+      if (users.length === 0) {
+        fetchUsers()
+      } else {
+        setInitialLoading(false)
+      }
     }
-  }, [isInitialized, authLoading, db, fetchUsers, currentUser, profile?.onboardingComplete])
+  }, [isInitialized, authLoading, db, fetchUsers, currentUser, profile?.onboardingComplete, users.length])
 
   const handleRefresh = () => { fetchUsers(true); setDisplayLimit(12); }
 
@@ -138,7 +147,7 @@ export default function HomePage() {
           <button onClick={handleRefresh} disabled={isRefreshing} className={cn("p-1.5 text-[#00A2FF]", isRefreshing && "animate-spin opacity-50")}><RotateCw className="w-5 h-5" /></button>
         </div>
         <main className="px-4 pt-3">
-          {initialLoading && users.length === 0 ? (
+          {initialLoading ? (
             <div className="grid grid-cols-2 gap-4">{[1, 2, 3, 4].map((i) => <div key={i} className="aspect-[1/1.2] bg-white animate-pulse rounded-2xl border" />)}</div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
