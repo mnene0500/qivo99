@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useRef } from "react"
@@ -147,7 +148,7 @@ export function CallManager() {
           </Button>
         </div>
 
-        <div className="relative z-10 flex flex-col items-center space-y-12 text-center w-full max-w-sm">
+        <div className="relative z-10 flex flex-col items-center space-y-12 text-center w-full max-sm:max-w-sm">
           <div className="relative">
             <div className="absolute inset-0 rounded-full bg-[#00A2FF]/20 animate-ping duration-[2000ms]" />
             <Avatar className="w-32 h-32 border-4 border-[#00A2FF] shadow-2xl relative z-10">

@@ -67,6 +67,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     const callSignalRef = ref(rtdb, `calls/${partnerId}`)
     const unsubscribe = onValue(callSignalRef, (snap) => {
       if (!snap.exists()) {
+         // If signal is gone before we start billing, it means rejection or cancellation
          if (!billingIntervalRef.current) {
             toast({ title: "Call Ended", description: `${partnerName} disconnected.` });
             hangUp();
