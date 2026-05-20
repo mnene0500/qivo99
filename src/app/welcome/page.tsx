@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -32,11 +33,17 @@ export default function WelcomePage() {
 
   // Auto-redirect if user is logged in
   useEffect(() => {
-    if (isInitialized && !authLoading && user && !profileLoading && profile) {
-      if (profile.onboardingComplete) {
-        router.replace("/home")
+    // Wait until both Auth and Profile (if user exists) are checked
+    if (isInitialized && !authLoading && !profileLoading && user) {
+      if (profile) {
+        if (profile.onboardingComplete) {
+          router.replace("/home")
+        } else {
+          router.replace(user.isAnonymous ? "/fastonboard" : "/onboarding")
+        }
       } else {
-        router.replace(user.isAnonymous ? "/fastonboard" : "/onboarding")
+        // User exists in Auth but not in Firestore yet (New Google User)
+        router.replace("/onboarding")
       }
     }
   }, [user, isInitialized, authLoading, profile, profileLoading, router])
@@ -55,6 +62,7 @@ export default function WelcomePage() {
     try {
       const provider = new GoogleAuthProvider()
       await signInWithPopup(auth, provider)
+      // Redirect is handled by the useEffect above
     } catch (error: any) {
       if (error.code !== 'auth/popup-closed-by-user') {
         toast({
@@ -69,7 +77,11 @@ export default function WelcomePage() {
   }
 
   if (!mounted || authLoading || !isInitialized || (user && profileLoading)) {
-    return <div className="fixed inset-0 bg-black" />
+    return (
+      <div className="fixed inset-0 bg-black flex items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-[#00A2FF]" />
+      </div>
+    )
   }
 
   return (

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
@@ -105,14 +106,19 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
-    if (isInitialized && !authLoading && !profileLoading && currentUserProfile && db && users.length === 0) {
+    if (isInitialized && !authLoading && !profileLoading && db && users.length === 0) {
+      if (!currentUserProfile) {
+        // No Firestore document exists for this user (New user needs onboarding)
+        router.replace("/onboarding")
+        return
+      }
       if (!currentUserProfile.onboardingComplete) {
         router.replace("/onboarding")
         return
       }
       fetchUsers()
     }
-  }, [isInitialized, authLoading, profileLoading, !!currentUserProfile, !!db, fetchUsers, users.length, router])
+  }, [isInitialized, authLoading, profileLoading, currentUserProfile, db, fetchUsers, users.length, router])
 
   const handleRefresh = () => {
     fetchUsers(true)
