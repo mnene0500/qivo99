@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, Suspense, useRef } from "react"
@@ -8,10 +7,11 @@ import { BottomNav } from "@/components/layout/BottomNav"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Loader2, User, Trash2, MoreVertical, Sparkles, AlertCircle } from "lucide-react"
+import { Send, ChevronLeft, Loader2, User, Trash2, MoreVertical, Sparkles, AlertCircle, Gift } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
+import { sendGiftAction } from "@/app/actions/matchflow-actions"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +47,7 @@ interface ChatSummary {
   last_message_at: number
   unread_count: number
   cleared_at?: Record<string, number>
+  last_seen_at?: Record<string, number>
 }
 
 function ChatsContent() {
@@ -67,12 +68,19 @@ function ChatsContent() {
   const [isSending, setIsSending] = useState(false)
   const [activeChatClearedAt, setActiveChatClearedAt] = useState<number>(0)
   
-  // Long Press & Delete States
   const [chatToDelete, setChatToDelete] = useState<ChatSummary | null>(null)
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
   const [isLongPressing, setIsLongPressing] = useState(false)
 
-  // Fetch Current User Profile & Balance
+  // 1. Mark Chat as Seen
+  const markAsSeen = async (id: string) => {
+    if (!currentUser?.id) return
+    const { data } = await supabase.from('chats').select('last_seen_at').eq('id', id).single()
+    const newSeenAt = { ...(data?.last_seen_at || {}), [currentUser.id]: Date.now() }
+    await supabase.from('chats').update({ last_seen_at: newSeenAt }).eq('id', id)
+  }
+
+  // 2. Fetch User Info & Balance
   useEffect(() => {
     if (!currentUser?.id) return
     const fetchMyInfo = async () => {
@@ -91,7 +99,7 @@ function ChatsContent() {
     return () => { supabase.removeChannel(balChan) }
   }, [currentUser?.id])
 
-  // Fetch Chat List (Summaries)
+  // 3. Fetch Chat List (Summaries)
   useEffect(() => {
     if (!currentUser?.id || startWithId) return
     
@@ -110,6 +118,9 @@ function ChatsContent() {
           const userClearedAt = c.cleared_at?.[currentUser.id] || 0
           if (c.last_message_at <= userClearedAt) return null
 
+          const userSeenAt = c.last_seen_at?.[currentUser.id] || 0
+          const isUnread = c.last_message_at > userSeenAt && c.participant_ids[0] !== currentUser.id // Simplified check
+
           const { data: p } = await supabase.from('users').select('name, photo_url').eq('uid', pId).single()
           return {
             id: c.id,
@@ -118,7 +129,7 @@ function ChatsContent() {
             partner_photo: p?.photo_url || "",
             last_message: c.last_message || "",
             last_message_at: c.last_message_at || Date.now(),
-            unread_count: 0,
+            unread_count: isUnread ? 1 : 0,
             cleared_at: c.cleared_at
           } as ChatSummary
         }))
@@ -132,12 +143,13 @@ function ChatsContent() {
     return () => { supabase.removeChannel(channel) }
   }, [currentUser?.id, startWithId])
 
-  // Set Active Chat ID
+  // 4. Handle Active Chat
   useEffect(() => {
     if (currentUser?.id && startWithId) {
       const ids = [currentUser.id, startWithId].sort()
       const cId = `direct_${ids[0]}_${ids[1]}`
       setChatId(cId)
+      markAsSeen(cId)
       supabase.from('users').select('*').eq('uid', startWithId).single().then(({ data }) => setPartnerProfile(data))
       supabase.from('chats').select('cleared_at').eq('id', cId).single().then(({ data }) => {
         if (data) setActiveChatClearedAt(data.cleared_at?.[currentUser.id] || 0)
@@ -145,11 +157,10 @@ function ChatsContent() {
     } else {
       setChatId(null)
       setPartnerProfile(null)
-      setActiveChatClearedAt(0)
     }
   }, [currentUser?.id, startWithId])
 
-  // Listen for Messages
+  // 5. Message Listener
   useEffect(() => {
     if (!chatId) return
     const fetchMessages = async () => {
@@ -164,6 +175,7 @@ function ChatsContent() {
         if (prev.some(m => m.text === newMsg.text && Math.abs(m.timestamp - newMsg.timestamp) < 5000)) return prev
         return [newMsg, ...prev]
       })
+      markAsSeen(chatId)
     }).subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [chatId, activeChatClearedAt])
@@ -199,6 +211,13 @@ function ChatsContent() {
     }
   }
 
+  const handleSendGift = async () => {
+    if (!currentUser || !startWithId) return
+    const res = await sendGiftAction(currentUser.id, startWithId, 200, "Rose")
+    if (res.success) toast({ title: "Gift Sent!" })
+    else toast({ variant: "destructive", title: "Error", description: res.error })
+  }
+
   const handleClearChat = async (targetId?: string) => {
     const id = targetId || chatId
     if (!id || !currentUser?.id) return
@@ -207,38 +226,20 @@ function ChatsContent() {
       const { data: existing } = await supabase.from('chats').select('cleared_at').eq('id', id).single()
       const newClearedAt = { ...(existing?.cleared_at || {}), [currentUser.id]: now }
       await supabase.from('chats').update({ cleared_at: newClearedAt }).eq('id', id)
-      
-      if (!targetId) {
-        setActiveChatClearedAt(now)
-        setMessages([])
-        router.push('/chats')
-      } else {
-        setChatSummaries(prev => prev.filter(s => s.id !== targetId))
-      }
+      if (!targetId) { router.push('/chats') } else { setChatSummaries(prev => prev.filter(s => s.id !== targetId)) }
       toast({ title: "Chat cleared" })
-    } catch (err) {
-      toast({ variant: "destructive", title: "Failed to clear" })
-    }
+    } catch (err) { toast({ variant: "destructive", title: "Failed to clear" }) }
   }
 
-  // Long Press Handlers
   const handleTouchStart = (chat: ChatSummary) => {
     setIsLongPressing(false)
-    const timer = setTimeout(() => {
-      setIsLongPressing(true)
-      setChatToDelete(chat)
-    }, 600)
+    const timer = setTimeout(() => { setIsLongPressing(true); setChatToDelete(chat); }, 600)
     setLongPressTimer(timer)
   }
 
   const handleTouchEnd = (chat: ChatSummary) => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer)
-      setLongPressTimer(null)
-    }
-    if (!isLongPressing) {
-      router.push(`/chats?startWith=${chat.partner_id}`)
-    }
+    if (longPressTimer) { clearTimeout(longPressTimer); setLongPressTimer(null); }
+    if (!isLongPressing) { router.push(`/chats?startWith=${chat.partner_id}`) }
   }
 
   if (!startWithId) return (
@@ -256,22 +257,17 @@ function ChatsContent() {
             <p className="font-bold text-sm text-black uppercase tracking-widest">No conversations yet</p>
           </div>
         ) : chatSummaries.map(s => (
-          <div 
-            key={s.id} 
-            onMouseDown={() => handleTouchStart(s)}
-            onMouseUp={() => handleTouchEnd(s)}
-            onMouseLeave={() => { if(longPressTimer) clearTimeout(longPressTimer) }}
-            onTouchStart={() => handleTouchStart(s)}
-            onTouchEnd={() => handleTouchEnd(s)}
-            className="p-5 border-b border-gray-50 flex items-center gap-4 active:bg-gray-50 transition-colors cursor-pointer"
-          >
-            <Avatar className="w-14 h-14 border border-gray-100"><AvatarImage src={s.partner_photo} className="object-cover" /><AvatarFallback>{s.partner_name?.[0]}</AvatarFallback></Avatar>
+          <div key={s.id} onMouseDown={() => handleTouchStart(s)} onMouseUp={() => handleTouchEnd(s)} onMouseLeave={() => { if(longPressTimer) clearTimeout(longPressTimer) }} onTouchStart={() => handleTouchStart(s)} onTouchEnd={() => handleTouchEnd(s)} className="p-5 border-b border-gray-50 flex items-center gap-4 active:bg-gray-50 transition-colors cursor-pointer relative">
+            <div className="relative">
+              <Avatar className="w-14 h-14 border border-gray-100"><AvatarImage src={s.partner_photo} className="object-cover" /><AvatarFallback>{s.partner_name?.[0]}</AvatarFallback></Avatar>
+              {s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white animate-in zoom-in">NEW</div>}
+            </div>
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-center mb-1">
-                <p className="font-black text-sm text-black truncate">{s.partner_name}</p>
+                <p className={cn("text-sm truncate", s.unread_count > 0 ? "font-black text-black" : "font-bold text-gray-700")}>{s.partner_name}</p>
                 <span className="text-[9px] font-bold text-gray-300 uppercase">{format(s.last_message_at, "HH:mm")}</span>
               </div>
-              <p className="text-xs font-medium text-gray-500 truncate leading-relaxed">{s.last_message}</p>
+              <p className={cn("text-xs truncate leading-relaxed", s.unread_count > 0 ? "font-bold text-black" : "font-medium text-gray-400")}>{s.last_message}</p>
             </div>
           </div>
         ))}
@@ -280,26 +276,16 @@ function ChatsContent() {
       <AlertDialog open={!!chatToDelete} onOpenChange={(open) => !open && setChatToDelete(null)}>
         <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none shadow-2xl">
           <AlertDialogHeader className="items-center text-center">
-            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4">
-              <AlertCircle className="w-8 h-8 text-red-500" />
-            </div>
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4"><AlertCircle className="w-8 h-8 text-red-500" /></div>
             <AlertDialogTitle className="text-xl font-bold tracking-tight">Delete Chat?</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
-              This will remove the chat from your list. Your partner will still see the messages.
-            </AlertDialogDescription>
+            <AlertDialogDescription className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-relaxed">This will remove the chat from your list.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-row gap-3 mt-6">
             <AlertDialogCancel className="flex-1 h-14 rounded-full border-2 font-bold uppercase text-[10px] tracking-widest mt-0">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={() => chatToDelete && handleClearChat(chatToDelete.id)} 
-              className="flex-1 h-14 rounded-full bg-red-500 hover:bg-red-600 font-bold uppercase text-[10px] tracking-widest"
-            >
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction onClick={() => chatToDelete && handleClearChat(chatToDelete.id)} className="flex-1 h-14 rounded-full bg-red-500 hover:bg-red-600 font-bold uppercase text-[10px] tracking-widest">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
       <BottomNav />
     </div>
   )
@@ -307,9 +293,7 @@ function ChatsContent() {
   return (
     <div className="flex flex-col h-screen bg-white select-none">
       <header className="h-16 border-b flex items-center px-4 gap-4 sticky top-0 bg-white z-50">
-        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
-          <ChevronLeft className="w-6 h-6 text-black" />
-        </Button>
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <div className="flex items-center gap-3 flex-1">
           <Avatar className="w-9 h-9"><AvatarImage src={partnerProfile?.photo_url} className="object-cover" /><AvatarFallback>{partnerProfile?.name?.[0]}</AvatarFallback></Avatar>
           <div className="flex flex-col">
@@ -317,17 +301,18 @@ function ChatsContent() {
             <span className="text-[9px] font-bold text-green-500 uppercase tracking-widest mt-1">Online</span>
           </div>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-full"><MoreVertical className="w-5 h-5 text-gray-400" /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="rounded-2xl min-w-[160px]">
-            <DropdownMenuItem onClick={() => handleClearChat()} className="text-red-500 font-bold gap-2 p-3"><Trash2 className="w-4 h-4" /> Delete Chat</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={handleSendGift} className="rounded-full text-pink-500"><Gift className="w-5 h-5" /></Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-full"><MoreVertical className="w-5 h-5 text-gray-400" /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="rounded-2xl min-w-[160px]"><DropdownMenuItem onClick={() => handleClearChat()} className="text-red-500 font-bold gap-2 p-3"><Trash2 className="w-4 h-4" /> Delete Chat</DropdownMenuItem></DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto p-6 flex flex-col-reverse gap-4 bg-[#F9FAFB]">
         {messages.map(m => (
-          <div key={m.id} className={cn("max-w-[80%] p-4 rounded-3xl text-sm font-medium shadow-sm", m.sender_id === currentUser?.id ? "bg-[#00A2FF] text-white self-end rounded-br-none" : "bg-white text-black self-start rounded-bl-none border border-black/5", m.is_optimistic && "opacity-60")}>
+          <div key={m.id} className={cn("max-w-[80%] p-4 rounded-3xl text-sm font-medium shadow-sm", m.sender_id === currentUser?.id ? "bg-[#00A2FF] text-white self-end rounded-br-none" : "bg-white text-black self-start rounded-bl-none border border-black/5", m.is_optimistic && "opacity-60", m.is_gift && "bg-gradient-to-br from-pink-500 to-rose-400 text-white italic")}>
             {m.text}
           </div>
         ))}

@@ -1,5 +1,5 @@
 "use client"
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/firebase/auth/use-user'
 
@@ -18,8 +18,7 @@ export function usePresence() {
 
     channel
       .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState()
-        // Handle presence sync if needed
+        // Sync complete
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -32,6 +31,28 @@ export function usePresence() {
 }
 
 export function useUserPresence(userId?: string) {
-  // Simplified for prototype: real implementation would track specific channel keys
-  return { state: 'online' } 
+  const [presence, setPresence] = useState({ state: 'offline' });
+
+  useEffect(() => {
+    if (!userId) return;
+
+    // For a prototype, we'll check if the user tracked presence in the last 2 minutes
+    const fetchPresence = async () => {
+      const channel = supabase.channel('online-users');
+      channel.on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        if (state[userId]) {
+          setPresence({ state: 'online' });
+        } else {
+          setPresence({ state: 'offline' });
+        }
+      }).subscribe();
+      
+      return () => channel.unsubscribe();
+    }
+
+    fetchPresence();
+  }, [userId]);
+
+  return presence;
 }

@@ -1,4 +1,3 @@
-
 "use client"
 
 import Link from "next/link"
@@ -24,15 +23,23 @@ export function BottomNav() {
     const fetchUnread = async () => {
       const { data } = await supabase
         .from('chats')
-        .select('id')
+        .select('*')
         .contains('participant_ids', [user.id])
       
-      if (data) setTotalUnread(data.length > 0 ? 1 : 0)
+      if (data) {
+        const count = data.reduce((acc, chat) => {
+          const lastSeen = chat.last_seen_at?.[user.id] || 0;
+          const lastMsg = chat.last_message_at || 0;
+          // Simple logic: if message is newer than my last seen, it's unread
+          return (lastMsg > lastSeen) ? acc + 1 : acc;
+        }, 0);
+        setTotalUnread(count);
+      }
     }
 
     fetchUnread()
 
-    const channel = supabase.channel('unread-badge')
+    const channel = supabase.channel('unread-badge-global')
       .on('postgres_changes', { event: '*', table: 'chats' }, () => fetchUnread())
       .subscribe()
 
