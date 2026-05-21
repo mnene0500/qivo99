@@ -63,19 +63,22 @@ function ChatsContent() {
       if (chatsData) {
         const enhanced = await Promise.all(chatsData.map(async (c) => {
           const pId = c.participant_ids.find((id: string) => id !== currentUser.id)
+          if (!pId) return null;
+
           const { data: p } = await supabase.from('users').select('name, photo_url').eq('uid', pId).single()
           return {
             id: c.id,
             partner_id: pId,
             partner_name: p?.name || `User ${pId?.slice(0, 4)}`,
             partner_photo: p?.photo_url || "",
-            last_message: c.last_message,
-            last_message_at: c.last_message_at,
+            last_message: c.last_message || "",
+            last_message_at: c.last_message_at || Date.now(),
             unread_count: 0
           } as ChatSummary
         }))
-        setChatSummaries(enhanced)
-        globalChatCache = enhanced
+        const filtered = enhanced.filter(Boolean) as ChatSummary[]
+        setChatSummaries(filtered)
+        globalChatCache = filtered
       }
       setLoading(false)
     }
@@ -83,7 +86,11 @@ function ChatsContent() {
     fetchSummaries()
 
     const channel = supabase.channel('chats_realtime')
-      .on('postgres_changes', { event: '*', table: 'chats' }, () => fetchSummaries())
+      .on('postgres_changes', { 
+        event: '*', 
+        table: 'chats',
+        filter: `participant_ids=cs.{${currentUser.id}}`
+      }, () => fetchSummaries())
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -122,8 +129,7 @@ function ChatsContent() {
       }, (payload) => {
         const newMsg = payload.new as Message
         setMessages(prev => {
-          // Prevent duplicates if we already added it via Optimistic Update
-          if (prev.find(m => m.timestamp === newMsg.timestamp && m.text === newMsg.text)) return prev
+          if (prev.find(m => m.id === newMsg.id || (m.timestamp === newMsg.timestamp && m.text === newMsg.text))) return prev
           return [newMsg, ...prev]
         })
       })
@@ -139,7 +145,7 @@ function ChatsContent() {
     const timestamp = Date.now()
     setNewMessage("")
     
-    // OPTIMISTIC UI: Add to local state immediately
+    // OPTIMISTIC UI
     const tempId = `temp-${timestamp}`
     const optimisticMsg: Message = {
       id: tempId,
@@ -151,7 +157,17 @@ function ChatsContent() {
     setMessages(prev => [optimisticMsg, ...prev])
 
     try {
-      // 1. Insert Message
+      // 1. Update Chat Summary (ensure chat exists)
+      const { error: chatErr } = await supabase.from('chats').upsert({ 
+        id: chatId, 
+        last_message: text, 
+        last_message_at: timestamp, 
+        participant_ids: [currentUser.id, startWithId] 
+      }, { onConflict: 'id' })
+      
+      if (chatErr) throw chatErr
+
+      // 2. Insert Message
       const { error: msgErr } = await supabase.from('messages').insert({ 
         chat_id: chatId, 
         text: text, 
@@ -161,22 +177,12 @@ function ChatsContent() {
       
       if (msgErr) throw msgErr
 
-      // 2. Update Chat Summary
-      await supabase.from('chats').upsert({ 
-        id: chatId, 
-        last_message: text, 
-        last_message_at: timestamp, 
-        participant_ids: [currentUser.id, startWithId] 
-      }, { onConflict: 'id' })
-
-    } catch (err) {
-      // Rollback on error
+    } catch (err: any) {
       setMessages(prev => prev.filter(m => m.id !== tempId))
-      toast({ variant: "destructive", title: "Failed to send" })
+      toast({ variant: "destructive", title: "Message not sent", description: "You may not have permission for this chat." })
     }
   }
 
-  // CHAT LIST VIEW
   if (!startWithId) return (
     <div className="flex-1 bg-white min-h-screen pb-20 select-none">
       <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/80 backdrop-blur-md z-50">
@@ -225,7 +231,6 @@ function ChatsContent() {
     </div>
   )
 
-  // DIRECT CHAT VIEW
   return (
     <div className="flex flex-col h-screen bg-white select-none">
       <header className="h-16 border-b flex items-center px-4 gap-4 sticky top-0 bg-white z-50">

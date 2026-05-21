@@ -22,7 +22,7 @@ export function BottomNav() {
     if (!user?.id) return
     
     const fetchUnread = async () => {
-      // Simplified: check for presence of any chat
+      // Check for presence of any chat where the user is a participant
       const { data } = await supabase
         .from('chats')
         .select('id')
