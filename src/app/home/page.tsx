@@ -61,6 +61,7 @@ export default function HomePage() {
           .single();
 
         if (error || !data) {
+          console.warn("Profile not found or permission error, redirecting to onboarding.");
           router.replace("/fastonboard");
           return;
         }
@@ -70,6 +71,7 @@ export default function HomePage() {
           router.replace("/fastonboard");
         }
       } catch (err) {
+        console.error("Home profile check failed:", err);
         router.replace("/fastonboard");
       }
     };
@@ -107,6 +109,7 @@ export default function HomePage() {
         setUsers(shuffled)
         globalUserCache = shuffled
       }
+      if (error) console.error("Discovery error:", error.message);
     } catch (err) {
       console.error("Discovery fetch failed:", err);
     } finally {
@@ -157,18 +160,25 @@ export default function HomePage() {
           <button onClick={() => fetchUsers(true)} disabled={isRefreshing} className={cn("p-1.5 text-[#00A2FF]", isRefreshing && "animate-spin")}><RotateCw className="w-5 h-5" /></button>
         </div>
         <main className="px-4 pt-3">
-          <div className="grid grid-cols-2 gap-3">
-            {filteredUsers.map((u) => (
-              <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.2] rounded-2xl shadow-xl bg-white" onClick={() => router.push(`/users/${u.uid}`)}>
-                <Image src={u.photo_url || ""} alt={u.name} fill className="object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
-                <div className="absolute inset-x-0 bottom-0 p-3 text-white">
-                  <div className="flex items-center gap-1.5"><h4 className="font-bold text-sm truncate">{u.name}</h4>{u.is_verified && <BadgeCheck className="w-4 h-4 text-[#00A2FF] fill-white" />}</div>
-                  <div className="flex items-center gap-1.5 mt-1"><span className="bg-[#006400] text-white font-bold text-[10px] px-2 py-0.5 rounded-full">{calculateAge(u.dob)}</span><span className="text-white/60 text-[10px]">{u.country}</span></div>
-                </div>
-              </Card>
-            ))}
-          </div>
+          {filteredUsers.length === 0 && !initialLoading ? (
+            <div className="py-20 text-center space-y-4 opacity-40">
+               <RotateCw className="w-10 h-10 mx-auto text-gray-300" />
+               <p className="text-[10px] font-black uppercase tracking-widest">No users found</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {filteredUsers.map((u) => (
+                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.2] rounded-2xl shadow-xl bg-white" onClick={() => router.push(`/users/${u.uid}`)}>
+                  <Image src={u.photo_url || ""} alt={u.name} fill className="object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
+                  <div className="absolute inset-x-0 bottom-0 p-3 text-white">
+                    <div className="flex items-center gap-1.5"><h4 className="font-bold text-sm truncate">{u.name}</h4>{u.is_verified && <BadgeCheck className="w-4 h-4 text-[#00A2FF] fill-white" />}</div>
+                    <div className="flex items-center gap-1.5 mt-1"><span className="bg-[#006400] text-white font-bold text-[10px] px-2 py-0.5 rounded-full">{calculateAge(u.dob)}</span><span className="text-white/60 text-[10px]">{u.country}</span></div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
         </main>
       </div>
       <BottomNav />

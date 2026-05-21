@@ -4,7 +4,7 @@ const supabaseUrl = 'https://taxmenbtzsiotgcvptue.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRheG1lbmJ0enNpb3RnY3ZwdHVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTUzOTMsImV4cCI6MjA5NDY5MTM5M30.KToHUbmwdKus6jDoP7ojmM2xILcbIae3G-9E6Wb4xTw';
 
 /**
- * @fileOverview Central Supabase Client with hardcoded production credentials.
+ * @fileOverview Central Supabase Client.
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 

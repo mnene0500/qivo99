@@ -2,12 +2,12 @@
 
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { supabase, isSupabaseConfigured } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { ChevronLeft, Mail, UserPlus, Loader2, AlertCircle } from "lucide-react"
+import { ChevronLeft, Mail, UserPlus, Loader2 } from "lucide-react"
 
 export default function UnifiedAuthPage() {
   const [email, setEmail] = useState("")
@@ -51,14 +51,16 @@ export default function UnifiedAuthPage() {
 
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password })
-      if (error) throw error
+      const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
+      if (signUpError) throw signUpError
       
       const user = data.user
       if (!user) throw new Error("Registration failed to return user data.")
 
       const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
-      await supabase.from('users').insert({
+      
+      // 1. Create User Profile
+      const { error: profileError } = await supabase.from('users').insert({
         uid: user.id,
         email: user.email,
         name: email.split('@')[0],
@@ -70,6 +72,12 @@ export default function UnifiedAuthPage() {
         is_admin: false
       })
 
+      if (profileError) {
+        console.error("Profile creation error:", profileError);
+        throw new Error("Failed to create profile. Please check database permissions.");
+      }
+
+      // 2. Create Initial Balance
       await supabase.from('balances').insert({
         user_id: user.id,
         coins: 150,
