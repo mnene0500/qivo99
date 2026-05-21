@@ -1,18 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://taxmenbtzsiotgcvptue.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRheG1lbmJ0enNpb3RnY3ZwdHVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTUzOTMsImV4cCI6MjA5NDY5MTM5M30.KToHUbmwdKus6jDoP7ojmM2xILcbIae3G-9E6Wb4xTw';
 
 /**
  * @fileOverview Central Supabase Client for Auth, Database, and Realtime.
- * Validates configuration to prevent 'Failed to fetch' crashes.
+ * Now hardcoded with initial project credentials as requested.
  */
-export const isSupabaseConfigured = !!(supabaseUrl && supabaseUrl.startsWith('https://') && supabaseAnonKey && supabaseAnonKey !== 'placeholder-key');
+export const isSupabaseConfigured = true;
 
-export const supabase = createClient(
-  isSupabaseConfigured ? supabaseUrl : 'https://placeholder-project.supabase.co',
-  isSupabaseConfigured ? supabaseAnonKey : 'placeholder-key'
-);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
  * Helper to upload a base64 image to Supabase Storage.
