@@ -109,7 +109,6 @@ export default function HomePage() {
         setUsers(shuffled)
         globalUserCache = shuffled
       }
-      if (error) console.error("Discovery error:", error.message);
     } catch (err) {
       console.error("Discovery fetch failed:", err);
     } finally {

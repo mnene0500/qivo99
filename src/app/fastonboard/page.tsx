@@ -53,7 +53,7 @@ export default function FastOnboardingPage() {
       const socialName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || "User";
       const socialPhoto = user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://picsum.photos/seed/${user.id}/400/400`;
 
-      // 1. Create Profile
+      // 1. Create Profile (Upsert ensures we create if missing)
       const { error: profileErr } = await supabase.from('users').upsert({
         uid: user.id,
         email: user.email,
@@ -65,7 +65,7 @@ export default function FastOnboardingPage() {
         match_flow_id: qId,
         photo_url: socialPhoto,
         updated_at: new Date().toISOString()
-      })
+      }, { onConflict: 'uid' })
 
       if (profileErr) throw profileErr;
       
@@ -74,7 +74,7 @@ export default function FastOnboardingPage() {
         user_id: user.id,
         coins: initialCoins,
         diamonds: initialDiamonds
-      })
+      }, { onConflict: 'user_id' })
 
       // 3. Log initial bonus
       if (initialCoins > 0) {
