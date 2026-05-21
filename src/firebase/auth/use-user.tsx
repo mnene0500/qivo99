@@ -7,7 +7,6 @@ import { supabase } from '@/lib/supabase';
 /**
  * @fileOverview Pure Supabase Auth Hook.
  * Manages user identity exclusively via Supabase.
- * Firebase Auth has been completely removed.
  */
 export function useUser() {
   const [user, setUser] = useState<any>(null);

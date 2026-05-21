@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
@@ -20,8 +21,6 @@ interface UserProfile {
   dob: string
   onboarding_complete: boolean
   is_verified?: boolean
-  blocking?: string[]
-  blocked_by?: string[]
 }
 
 let globalUserCache: UserProfile[] = [];
@@ -61,7 +60,6 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!initialLoading) {
-       // Restore scroll position
        setTimeout(() => window.scrollTo(0, globalScrollY), 50);
     }
     const handleScroll = () => { globalScrollY = window.scrollY }
@@ -74,7 +72,7 @@ export default function HomePage() {
     else if (users.length === 0) setInitialLoading(true)
 
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('users')
         .select('*')
         .eq('onboarding_complete', true)

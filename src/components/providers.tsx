@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -7,7 +8,7 @@ import { InstallPrompt } from '@/components/layout/InstallPrompt';
 import { CallManager } from '@/components/CallManager';
 
 /**
- * Handles global user presence heartbeat.
+ * Handles global user presence heartbeat via Supabase.
  */
 function PresenceManager({ children }: { children: React.ReactNode }) {
   usePresence();
@@ -16,7 +17,6 @@ function PresenceManager({ children }: { children: React.ReactNode }) {
 
 /**
  * Root providers wrapper for the application.
- * Supabase handles auth and database via the single client in @/lib/supabase.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   return (

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo } from "react"
@@ -40,8 +41,7 @@ export default function UnifiedAuthPage() {
       if (error) throw error
       router.push("/home")
     } catch (error: any) {
-      const msg = error.message === 'Failed to fetch' ? "Network error. Check your internet or Supabase URL." : error.message;
-      toast({ variant: "destructive", title: "Login failed", description: msg })
+      toast({ variant: "destructive", title: "Login failed", description: error.message })
     } finally {
       setLoading(false)
     }
@@ -67,14 +67,11 @@ export default function UnifiedAuthPage() {
       if (!user) throw new Error("Registration failed to return user data.")
 
       // Initialize Profile in Supabase
-      const emailPrefix = email.split('@')[0];
-      const nameFromEmail = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1).replace(/[._]/g, ' ');
       const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
-
       await supabase.from('users').insert({
         uid: user.id,
         email: user.email,
-        name: nameFromEmail,
+        name: email.split('@')[0],
         match_flow_id: qId,
         onboarding_complete: false,
         country: "Kenya",
@@ -111,7 +108,7 @@ export default function UnifiedAuthPage() {
           <div className="bg-red-50 p-4 rounded-2xl flex items-start gap-3 border border-red-100">
             <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
             <p className="text-[10px] font-bold text-red-700 uppercase tracking-tight leading-relaxed">
-              Supabase is not configured. Please add NEXT_PUBLIC_SUPABASE_URL and ANON_KEY to your Vercel project and redeploy.
+              Supabase is not configured. Please add environment variables and redeploy.
             </p>
           </div>
         )}
