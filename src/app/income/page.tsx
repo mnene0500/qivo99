@@ -1,21 +1,18 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ref, get, update, increment as rtdbIncrement, push, set } from "firebase/database"
-import { useUser, useDatabase } from "@/firebase"
+import { supabase } from "@/lib/supabase"
+import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ChevronLeft, Gem, History, Coins, ArrowRightLeft, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { cn } from "@/lib/utils"
 
 export default function IncomePage() {
   const router = useRouter()
   const { user } = useUser()
-  const rtdb = useDatabase()
   const { toast } = useToast()
   
   const [balances, setBalances] = useState({ coins: 0, diamonds: 0 })
@@ -24,29 +21,24 @@ export default function IncomePage() {
   const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && user?.uid) {
-      const cached = localStorage.getItem(`balance_cache_${user.uid}`)
-      if (cached) setBalances(JSON.parse(cached))
-    }
-  }, [user?.uid])
-
-  useEffect(() => {
-    if (!user?.uid) return
+    if (!user?.id) return
     const fetchBalances = async () => {
-      try {
-        const snap = await get(ref(rtdb, `balances/${user.uid}`))
-        if (snap.exists()) {
-          const data = snap.val()
-          const newBal = { coins: data.coins || 0, diamonds: data.diamonds || 0 }
-          setBalances(newBal)
-          localStorage.setItem(`balance_cache_${user.uid}`, JSON.stringify(newBal))
-        }
-      } finally {
-        setBalanceLoading(false)
+      const { data } = await supabase.from('balances').select('*').eq('user_id', user.id).single()
+      if (data) {
+        setBalances({ coins: data.coins || 0, diamonds: data.diamonds || 0 })
       }
+      setBalanceLoading(false)
     }
     fetchBalances()
-  }, [rtdb, user?.uid])
+
+    const channel = supabase.channel(`income:${user.id}`)
+      .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
+        setBalances({ coins: payload.new.coins, diamonds: payload.new.diamonds })
+      })
+      .subscribe()
+      
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id])
 
   const diamondBalance = balances.diamonds
   const conversionRate = 0.09 
@@ -67,12 +59,20 @@ export default function IncomePage() {
     setIsProcessing(true)
     try {
       const timestamp = Date.now()
-      const balRef = ref(rtdb, `balances/${user?.uid}`)
-      await update(balRef, { diamonds: rtdbIncrement(-amount), coins: rtdbIncrement(expectedCoins), updatedAt: timestamp })
-      const updatedBal = { coins: balances.coins + expectedCoins, diamonds: balances.diamonds - amount }
-      setBalances(updatedBal)
-      if (user?.uid) localStorage.setItem(`balance_cache_${user.uid}`, JSON.stringify(updatedBal))
-      await set(push(ref(rtdb, `diamond_history/${user?.uid}`)), { amount: -amount, type: 'conversion', description: `Converted to ${expectedCoins} coins`, timestamp })
+      
+      const newDiamonds = balances.diamonds - amount
+      const newCoins = balances.coins + expectedCoins
+
+      await supabase.from('balances').update({ diamonds: newDiamonds, coins: newCoins }).eq('user_id', user?.id)
+      
+      await supabase.from('diamond_history').insert({ 
+        user_id: user?.id,
+        amount: -amount, 
+        type: 'conversion', 
+        description: `Converted to ${expectedCoins} coins`, 
+        timestamp 
+      })
+      
       toast({ title: "Success!", description: `Added ${expectedCoins} coins.` })
       setDiamondsToConvert("")
     } catch (err) {

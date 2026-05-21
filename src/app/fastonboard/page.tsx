@@ -2,9 +2,8 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore"
-import { ref, set as rtdbSet, push } from "firebase/database"
-import { useFirestore, useUser, useDatabase } from "@/firebase"
+import { supabase } from "@/lib/supabase"
+import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,8 +26,6 @@ export default function FastOnboardingPage() {
   const [loading, setLoading] = useState(false)
   
   const { user } = useUser()
-  const db = useFirestore()
-  const rtdb = useDatabase()
   const router = useRouter()
   const { toast } = useToast()
 
@@ -40,38 +37,32 @@ export default function FastOnboardingPage() {
   }
 
   const handleComplete = async () => {
-    if (!user || !db || !rtdb) return
+    if (!user) return
     setLoading(true)
 
     try {
-      const userRef = doc(db, "users", user.uid)
-      const userSnap = await getDoc(userRef)
-      const existingData = userSnap.data()
-
       const initialCoins = gender === 'male' ? 150 : 0
       const initialDiamonds = gender === 'female' ? 150 : 0
       const timestamp = Date.now()
 
-      const updateData: any = {
+      // 1. Update Profile
+      await supabase.from('users').update({
         gender,
         country,
-        lookingFor,
-        onboardingComplete: true,
-        updatedAt: serverTimestamp(),
-      }
-
-      // Merge with existing data (especially for Google users)
-      await setDoc(userRef, updateData, { merge: true })
+        looking_for: lookingFor,
+        onboarding_complete: true,
+      }).eq('uid', user.id)
       
-      const balanceRef = ref(rtdb, `balances/${user.uid}`)
-      await rtdbSet(balanceRef, {
+      // 2. Setup Initial Balance
+      await supabase.from('balances').upsert({
+        user_id: user.id,
         coins: initialCoins,
-        diamonds: initialDiamonds,
-        updatedAt: timestamp
+        diamonds: initialDiamonds
       })
 
       if (initialCoins > 0) {
-        await push(ref(rtdb, `coin_history/${user.uid}`), {
+        await supabase.from('coin_history').insert({
+          user_id: user.id,
           amount: initialCoins,
           type: 'bonus',
           description: 'Welcome Bonus',

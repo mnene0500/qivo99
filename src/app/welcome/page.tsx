@@ -5,9 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Mail, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { useUser, useFirestore, useDatabase } from "@/firebase"
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
-import { ref, set as rtdbSet } from "firebase/database"
+import { useUser } from "@/firebase/auth/use-user"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 
@@ -15,8 +13,6 @@ export default function WelcomePage() {
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(false)
   
-  const db = useFirestore()
-  const rtdb = useDatabase()
   const { user, loading: authLoading, isInitialized } = useUser()
   const router = useRouter()
   const { toast } = useToast()
@@ -32,23 +28,24 @@ export default function WelcomePage() {
   }, [user, isInitialized, authLoading, mounted])
 
   const checkProfileStatus = async (uid: string) => {
-    if (!db) return
-    const userRef = doc(db, "users", uid)
-    const userSnap = await getDoc(userRef)
-    
-    if (userSnap.exists() && userSnap.data().onboardingComplete) {
-      router.replace("/home")
-    } else {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('onboarding_complete')
+        .eq('uid', uid)
+        .single()
+      
+      if (data?.onboarding_complete) {
+        router.replace("/home")
+      } else {
+        router.replace("/fastonboard")
+      }
+    } catch (err) {
       router.replace("/fastonboard")
     }
   }
 
   const handleGoogleLogin = async () => {
-    if (!db || !rtdb) {
-      toast({ variant: "destructive", title: "Config Error", description: "Database services not ready." });
-      return;
-    }
-
     setLoading(true)
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -58,7 +55,6 @@ export default function WelcomePage() {
         }
       })
       if (error) throw error
-      // Note: Supabase OAuth redirects away from the page
     } catch (error: any) {
       toast({ variant: "destructive", title: "Sign-In Error", description: error.message })
       setLoading(false)

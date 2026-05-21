@@ -1,16 +1,13 @@
-
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { collection, query, where, limit, getDocs, doc } from "firebase/firestore"
-import { ref, update, increment as rtdbIncrement, push, set, get } from "firebase/database"
-import { useFirestore, useUser, useDoc, useDatabase } from "@/firebase"
+import { supabase } from "@/lib/supabase"
+import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ChevronLeft, Coins, Users, Loader2, Send, Sparkles } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { cn } from "@/lib/utils"
 
 const RECIPIENT_OPTIONS = [2, 5, 10, 20]
 const COST_PER_PERSON = 5
@@ -18,30 +15,29 @@ const COST_PER_PERSON = 5
 export default function MysteryNotePage() {
   const router = useRouter()
   const { user } = useUser()
-  const db = useFirestore()
-  const rtdb = useDatabase()
   const { toast } = useToast()
 
   const [message, setMessage] = useState("")
   const [recipientCount, setRecipientCount] = useState(2)
   const [isSending, setIsSending] = useState(false)
   const [userCoins, setUserCoins] = useState(0)
-
-  const userRef = useMemo(() => (user?.uid && db) ? doc(db, "users", user.uid) : null, [db, user?.uid])
-  const { data: profile } = useDoc<any>(userRef)
+  const [profile, setProfile] = useState<any>(null)
 
   useEffect(() => {
-    if (!user?.uid || !rtdb) return
-    const balRef = ref(rtdb, `balances/${user.uid}/coins`)
-    get(balRef).then(snap => {
-      if (snap.exists()) setUserCoins(snap.val())
-    })
-  }, [user?.uid, rtdb])
+    if (!user?.id) return
+    const fetchData = async () => {
+      const { data: u } = await supabase.from('users').select('*').eq('uid', user.id).single()
+      const { data: b } = await supabase.from('balances').select('coins').eq('user_id', user.id).single()
+      if (u) setProfile(u)
+      if (b) setUserCoins(b.coins)
+    }
+    fetchData()
+  }, [user?.id])
 
   const totalCost = recipientCount * COST_PER_PERSON
 
   const handleSend = async () => {
-    if (!user || !profile || !message.trim() || !db || !rtdb) return
+    if (!user || !profile || !message.trim()) return
     if (userCoins < totalCost) {
       toast({ variant: "destructive", title: "Insufficient Coins", description: `You need ${totalCost} coins.` })
       return
@@ -50,28 +46,39 @@ export default function MysteryNotePage() {
     setIsSending(true)
     try {
       const targetGender = profile.gender === 'male' ? 'female' : 'male'
-      const q = query(collection(db, "users"), where("gender", "==", targetGender), where("onboardingComplete", "==", true), limit(50))
-      const snap = await getDocs(q)
-      const allTargets = snap.docs.map(d => ({ uid: d.id, ...d.data() } as any)).filter(u => u.uid !== user.uid).sort(() => Math.random() - 0.5).slice(0, recipientCount)
+      
+      const { data: targets } = await supabase
+        .from('users')
+        .select('uid, name, photo_url')
+        .eq('gender', targetGender)
+        .eq('onboarding_complete', true)
+        .neq('uid', user.id)
+        .limit(50)
 
-      if (allTargets.length < recipientCount) {
+      if (!targets || targets.length < recipientCount) {
         toast({ variant: "destructive", title: "Error", description: "Not enough recipients found." })
         setIsSending(false)
         return
       }
 
+      const shuffled = targets.sort(() => Math.random() - 0.5).slice(0, recipientCount)
       const timestamp = Date.now()
-      await update(ref(rtdb, `balances/${user.uid}`), { coins: rtdbIncrement(-totalCost), updatedAt: timestamp })
-      await push(ref(rtdb, `coin_history/${user.uid}`), { amount: -totalCost, type: 'mystery_note', description: `Mystery Note to ${recipientCount} people`, timestamp })
 
-      for (const target of allTargets) {
-        const ids = [user.uid, target.uid].sort()
+      // Deduct Balance
+      await supabase.from('balances').update({ coins: userCoins - totalCost }).eq('user_id', user.id)
+      await supabase.from('coin_history').insert({ amount: -totalCost, type: 'mystery_note', description: `Mystery Note to ${recipientCount} people`, timestamp, user_id: user.id })
+
+      for (const target of shuffled) {
+        const ids = [user.id, target.uid].sort()
         const chatId = `direct_${ids[0]}_${ids[1]}`
-        await set(push(ref(rtdb, `chat_messages/${chatId}`)), { text: message.trim(), senderId: user.uid, timestamp })
-        const updates: any = {}
-        updates[`user_chats/${user.uid}/${chatId}`] = { partnerId: target.uid, partnerName: target.name, partnerPhoto: target.photoURL, lastMessage: message.trim(), lastMessageAt: timestamp, unreadCount: 0 }
-        updates[`user_chats/${target.uid}/${chatId}`] = { partnerId: user.uid, partnerName: profile.name, partnerPhoto: profile.photoURL, lastMessage: message.trim(), lastMessageAt: timestamp, unreadCount: rtdbIncrement(1) }
-        await update(ref(rtdb), updates)
+        
+        await supabase.from('messages').insert({ chat_id: chatId, text: message.trim(), sender_id: user.id, timestamp })
+        await supabase.from('chats').upsert({
+          id: chatId,
+          last_message: message.trim(),
+          last_message_at: timestamp,
+          participant_ids: [user.id, target.uid]
+        })
       }
 
       toast({ title: "Note Sent!" })
