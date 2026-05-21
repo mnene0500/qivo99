@@ -10,6 +10,6 @@ export const PESAPAL_CONFIG = {
   API_BASE_URL: process.env.PESAPAL_API_BASE_URL || 'https://pay.pesapal.com/v3',
   IPN_URL: 'https://qivo-gamma.vercel.app/api/pesapal/callback',
   CALLBACK_URL: 'https://qivo-gamma.vercel.app/recharge',
-  // prioritized from env
+  // IPN ID is required for live payments to trigger the webhook
   IPN_ID: process.env.PESAPAL_IPN_ID || '', 
 };

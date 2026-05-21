@@ -49,10 +49,19 @@ export default function UnifiedAuthPage() {
   const handleGoogleLogin = async () => {
     setSocialLoading(true)
     try {
+      // Use window.location.origin for automatic environment detection (localhost vs Vercel)
+      const redirectTo = typeof window !== 'undefined' 
+        ? `${window.location.origin}/home` 
+        : 'https://qivo-gamma.vercel.app/home';
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/home` : ''
+          redirectTo,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         }
       })
       if (error) throw error
@@ -76,9 +85,6 @@ export default function UnifiedAuthPage() {
       
       const user = data.user
       if (!user) throw new Error("Registration failed.")
-
-      // Note: Initial profile creation happens in fastonboard/page.tsx
-      // to handle both Email and Social users consistently.
       router.push("/fastonboard")
     } catch (error: any) {
       toast({ variant: "destructive", title: "Registration failed", description: error.message })
