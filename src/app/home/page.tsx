@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
@@ -6,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { BottomNav } from "@/components/layout/BottomNav"
-import { RotateCw, BadgeCheck, Loader2, Sparkles, Trophy, FileText, Target } from "lucide-react"
+import { RotateCw, BadgeCheck, Loader2, FileText, Target } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
@@ -23,9 +22,6 @@ interface UserProfile {
   is_deleted?: boolean
 }
 
-/**
- * GLOBAL PERSISTENCE CACHE
- */
 let globalUserCache: UserProfile[] = [];
 let globalScrollY = 0;
 
@@ -138,39 +134,39 @@ export default function HomePage() {
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
       {/* HEADER WITH BLUE BACKGROUND AND WATERMARK */}
-      <div className="bg-[#00A2FF] h-40 relative overflow-hidden">
+      <div className="bg-[#00A2FF] h-32 relative overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10">
           <span className="text-8xl font-logo font-black text-white -rotate-12 tracking-tighter">QIVO</span>
         </div>
+      </div>
+
+      {/* TOP ACTION CARDS - MOVED TO FLOW TO PREVENT OVERLAP */}
+      <div className="relative px-4 grid grid-cols-2 gap-3 -mt-16 z-20">
+        <button 
+          onClick={() => router.push('/mystery-note')}
+          className="h-32 bg-gradient-to-br from-[#FFA800] to-[#FF8A00] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"
+        >
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-1">
+            <FileText className="w-5 h-5 text-white" />
+          </div>
+          <p className="text-lg font-black leading-none">Mystery Note</p>
+          <p className="text-[9px] font-bold opacity-80 tracking-widest">SEND A NOTE</p>
+        </button>
         
-        {/* TOP ACTION CARDS */}
-        <div className="absolute inset-x-0 bottom-[-40px] px-4 grid grid-cols-2 gap-3 z-20">
-          <button 
-            onClick={() => router.push('/mystery-note')}
-            className="h-32 bg-gradient-to-br from-[#FFA800] to-[#FF8A00] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"
-          >
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-1">
-              <FileText className="w-5 h-5 text-white" />
-            </div>
-            <p className="text-lg font-black leading-none">Mystery Note</p>
-            <p className="text-[9px] font-bold opacity-80 tracking-widest">SEND A NOTE</p>
-          </button>
-          
-          <button 
-            onClick={() => router.push('/tasks')}
-            className="h-32 bg-gradient-to-br from-[#7C69FF] to-[#A28EFF] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"
-          >
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-1">
-              <Target className="w-5 h-5 text-white" />
-            </div>
-            <p className="text-lg font-black leading-none">Task Center</p>
-            <p className="text-[9px] font-bold opacity-80 tracking-widest">EARN REWARDS</p>
-          </button>
-        </div>
+        <button 
+          onClick={() => router.push('/tasks')}
+          className="h-32 bg-gradient-to-br from-[#7C69FF] to-[#A28EFF] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"
+        >
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-1">
+            <Target className="w-5 h-5 text-white" />
+          </div>
+          <p className="text-lg font-black leading-none">Task Center</p>
+          <p className="text-[9px] font-bold opacity-80 tracking-widest">EARN REWARDS</p>
+        </button>
       </div>
 
       {/* TAB SELECTOR */}
-      <div className="mt-14 px-6 py-4 flex items-center justify-between bg-white">
+      <div className="px-6 py-4 flex items-center justify-between bg-white sticky top-0 z-30 shadow-sm sm:shadow-none">
         <div className="flex items-center gap-8">
           <button 
             onClick={() => setActiveTab('Recommend')} 
@@ -226,11 +222,10 @@ export default function HomePage() {
                   alt={u.name} 
                   fill 
                   className="object-cover"
-                  sizes="(max-width: 768px) 50vw, 25vw"
+                  sizes="(max-width: 768px) 50vw, 300px"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
                 
-                {/* BLUE CHAT BUTTON */}
                 <div 
                   onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}
                   className="absolute top-3 right-3 px-5 h-9 bg-[#00A2FF] rounded-full flex items-center justify-center text-white shadow-lg active:scale-90 transition-all z-20"

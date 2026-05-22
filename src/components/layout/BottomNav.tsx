@@ -1,9 +1,8 @@
-
 "use client"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, MessageSquare, User, Mic2 } from "lucide-react"
+import { Home, MessageSquare, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
@@ -46,7 +45,6 @@ export function BottomNav() {
 
   const navItems = [
     { label: "Home", icon: Home, href: "/home" },
-    { label: "Party", icon: Mic2, href: "/party" },
     { label: "Chat", icon: MessageSquare, href: "/chats", badge: totalUnread },
     { label: "Me", icon: User, href: "/profile" },
   ]
