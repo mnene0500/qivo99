@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
@@ -244,9 +243,9 @@ export default function MePage() {
           </div>
 
           <div className="relative mb-4">
-            <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-muted border-4 border-white/20">
+            <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-muted">
               {profile?.photo_url ? (
-                <Image src={profile.photo_url} alt={profile.name || "User"} fill className="object-cover" priority />
+                <Image src={profile.photo_url} alt={profile.name || "User"} fill className="object-cover" priority sizes="112px" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gray-100">
                   <User className="w-12 h-12 text-gray-300" />
@@ -335,15 +334,6 @@ export default function MePage() {
 
           {/* LIST MENU */}
           <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
-            <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
-              <Link href="/blocked-list">
-                <div className="flex items-center gap-4">
-                  <div className="bg-red-50 p-2.5 rounded-xl"><Ban className="w-5 h-5 text-red-500" /></div>
-                  <span className="font-semibold text-xs text-black">Blocked List</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-300" />
-              </Link>
-            </Button>
             <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
               <Link href="/support">
                 <div className="flex items-center gap-4">

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -115,10 +114,11 @@ export default function SettingsPage() {
           <SettingItem label="About QIVO" href="/about" icon={<Info className="w-5 h-5 text-gray-500" />} />
           <SettingItem label="Clear Cache" onClick={handleClearCache} icon={<RefreshCw className="w-5 h-5 text-orange-500" />} />
 
-          {!profile?.is_admin && !loading && (
+          {/* Delete Account button optimized to prevent sudden flickering */}
+          {!loading && !profile?.is_admin && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <div className="flex items-center justify-between py-5 px-6 border-b border-gray-50 active:bg-gray-50 transition-colors cursor-pointer bg-white">
+                <div className="flex items-center justify-between py-5 px-6 border-b border-gray-50 active:bg-gray-50 transition-colors cursor-pointer bg-white animate-in fade-in duration-300">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-2xl flex items-center justify-center bg-red-50">
                       <Trash2 className="w-5 h-5 text-red-500" />
