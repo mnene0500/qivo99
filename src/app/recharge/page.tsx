@@ -10,9 +10,6 @@ import {
   ChevronLeft, 
   Loader2, 
   History, 
-  Users, 
-  ArrowRight,
-  ShieldCheck,
   CheckCircle2,
   Zap
 } from "lucide-react"
@@ -26,7 +23,6 @@ import {
 } from "@/components/ui/dialog"
 
 const PACKAGES = [
-  { amount: 200, price: 1.0 }, 
   { amount: 500, price: 80.0 },
   { amount: 1000, price: 120.0 },
   { amount: 2000, price: 230.0 },
@@ -48,24 +44,20 @@ function RechargeContent() {
   const [fulfillmentSuccess, setFulfillmentSuccess] = useState(false)
   
   const [currentCoins, setCurrentCoins] = useState<number | null>(null)
-  const [profile, setProfile] = useState<any>(null)
   
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null)
   const successTriggeredRef = useRef(false)
 
-  // 1. FAST INITIAL FETCH & REALTIME PULSE
+  // 1. FAST REALTIME PULSE
   useEffect(() => {
     if (!user?.id) return
     
     const fetchData = async () => {
-      const { data: u } = await supabase.from('users').select('*').eq('uid', user.id).single()
       const { data: b } = await supabase.from('balances').select('coins').eq('user_id', user.id).single()
-      if (u) setProfile(u)
       if (b) setCurrentCoins(Number(b.coins) || 0)
     }
     fetchData()
 
-    // REALTIME: This is what makes it "Sudden"
     const channel = supabase.channel(`recharge-pulse:${user.id}`)
       .on('postgres_changes', { 
         event: 'UPDATE', 
@@ -89,7 +81,7 @@ function RechargeContent() {
     }
   }, [user?.id, currentCoins])
 
-  // 2. AGGRESSIVE AUTO-VERIFY (The "Swift" logic)
+  // 2. AGGRESSIVE AUTO-VERIFY (Sudden Update)
   useEffect(() => {
     const orderId = searchParams.get("OrderTrackingId") || searchParams.get("orderTrackingId")
     const merchantRef = searchParams.get("OrderMerchantReference") || searchParams.get("orderMerchantReference")
@@ -104,17 +96,11 @@ function RechargeContent() {
           successTriggeredRef.current = true
           setFulfillmentSuccess(true)
           setIsFulfilling(false)
-          if (pollTimerRef.current) clearInterval(pollTimerRef.current)
         }
       }
 
-      // First check is instant
       verify()
-      
-      // Frequent checks every 1.5s (The background IPN usually wins anyway)
       pollTimerRef.current = setInterval(verify, 1500)
-      
-      // Stop after 60s
       setTimeout(() => { if (pollTimerRef.current) clearInterval(pollTimerRef.current) }, 60000)
     }
 
@@ -123,13 +109,13 @@ function RechargeContent() {
 
   const handlePayment = async () => {
     const pkg = PACKAGES.find(p => p.amount === selectedPackage)
-    if (!user || !profile || !pkg) return
+    if (!user || !pkg) return
     setLoading(true)
     try {
       const result = await initiatePesaPalPayment(pkg.price, {
         uid: user.id,
         email: user.email || `user_${user.id}@qivo.app`,
-        name: profile.name || "QIVO User"
+        name: "QIVO User"
       })
       if (result.success && result.redirect_url) setPaymentUrl(result.redirect_url)
       else toast({ variant: "destructive", title: "Error", description: result.error })
@@ -159,7 +145,7 @@ function RechargeContent() {
         </div>
         <div className="text-center space-y-2">
           <h2 className={cn("text-3xl font-black italic tracking-tighter uppercase", fulfillmentSuccess ? "text-green-600" : "text-black")}>
-            {fulfillmentSuccess ? "COINS ADDED!" : "SWIFT VERIFYING"}
+            {fulfillmentSuccess ? "COINS ADDED!" : "VERIFYING..."}
           </h2>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em]">{fulfillmentSuccess ? "FULFILLMENT COMPLETE" : "STAY ON THIS PAGE"}</p>
         </div>
@@ -185,7 +171,7 @@ function RechargeContent() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             {PACKAGES.map((p) => (
-              <div key={p.amount} onClick={() => setSelectedPackage(p.amount)} className={cn("relative rounded-[2rem] h-32 flex flex-col items-center justify-center p-4 transition-all active:scale-95 cursor-pointer border-2", selectedPackage === p.amount ? "bg-white border-[#00A2FF] shadow-xl ring-4 ring-blue-50" : "bg-white border-transparent shadow-sm")}>
+              <div key={p.amount} onClick={() => setSelectedPackage(p.amount)} className={cn("relative rounded-[2rem] h-32 flex flex-col items-center justify-center p-4 transition-all active:scale-95 cursor-pointer border-2", selectedPackage === p.amount ? "bg-white border-[#00A2FF] shadow-xl" : "bg-white border-transparent shadow-sm")}>
                 <span className="text-2xl font-black text-black tracking-tighter">{p.amount}</span>
                 <div className="bg-gray-50 px-3 py-1 rounded-full border border-gray-100 mt-2"><span className="text-[10px] font-black text-[#00A2FF]">KES {p.price}</span></div>
               </div>
@@ -203,7 +189,7 @@ function RechargeContent() {
           <DialogTitle className="sr-only">Secure Checkout</DialogTitle>
           <div className="h-14 bg-white border-b flex items-center px-4">
              <Button variant="ghost" size="sm" onClick={() => setPaymentUrl(null)} className="rounded-full font-bold text-[10px] uppercase gap-2"><ChevronLeft className="w-4 h-4" /> Cancel</Button>
-             <div className="flex-1 flex justify-center items-center gap-2"><ShieldCheck className="w-4 h-4 text-green-500" /><span className="text-[9px] font-black uppercase">Secure Checkout</span></div>
+             <div className="flex-1 flex justify-center items-center gap-2"><Zap className="w-4 h-4 text-green-500" /><span className="text-[9px] font-black uppercase">Secure Checkout</span></div>
              <div className="w-20" />
           </div>
           <div className="flex-1 relative bg-gray-50">{paymentUrl && <iframe src={paymentUrl} className="absolute inset-0 w-full h-full border-none" title="Checkout" allow="payment" />}</div>
