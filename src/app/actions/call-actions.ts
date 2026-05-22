@@ -8,12 +8,18 @@ import { supabaseAdmin } from '@/lib/supabase';
  */
 
 export async function getZegoConfigAction() {
+  const appId = process.env.ZEGO_APP_ID;
+  const serverSecret = process.env.ZEGO_SERVER_SECRET;
+
+  if (!appId || !serverSecret) {
+    console.error("ZegoCloud Error: Missing ZEGO_APP_ID or ZEGO_SERVER_SECRET in environment variables.");
+    return { success: false, error: "Calling service not configured." };
+  }
+
   return {
-    appId: Number(process.env.ZEGO_APP_ID || process.env.NEXT_PUBLIC_ZEGO_APP_ID),
-    // In a final production app, you would generate a JWT token here using the ZEGO_SERVER_SECRET
-    // For this high-fidelity prototype, we return the AppID and use the server secret via the 
-    // secure kit token generator if available, or instruct the user to use the Server SDK.
-    serverSecret: process.env.ZEGO_SERVER_SECRET
+    success: true,
+    appId: Number(appId),
+    serverSecret: serverSecret
   };
 }
 
@@ -33,24 +39,27 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
 
     // 2. Get Recipient Profile for Diamond Reward
     const { data: recipient } = await supabaseAdmin.from('users').select('gender, name').eq('uid', partnerId).single();
+    
+    // Default rewards: 50% for females, 40% for males
     const rewardRate = recipient?.gender === 'female' ? 0.5 : 0.4;
     const diamondReward = Math.floor(cost * rewardRate);
 
     const timestamp = Date.now();
 
     // 3. Atomic Updates
+    const { error: deductErr } = await supabaseAdmin.from('balances').update({ coins: currentCoins - cost }).eq('user_id', uid);
+    if (deductErr) throw deductErr;
+
+    // Award to Recipient
+    await supabaseAdmin.rpc('increment_diamonds', { user_id: partnerId, amount: diamondReward });
+    
+    // Log History
     await Promise.all([
-      // Deduct from Caller
-      supabaseAdmin.from('balances').update({ coins: currentCoins - cost }).eq('user_id', uid),
-      // Award to Recipient
-      supabaseAdmin.rpc('increment_diamonds', { user_id: partnerId, amount: diamondReward }),
-      
-      // Log History
       supabaseAdmin.from('coin_history').insert({
         user_id: uid,
         amount: -cost,
         type: 'call',
-        description: `${type} call with ${partnerName}`,
+        description: `${type.charAt(0).toUpperCase() + type.slice(1)} call with ${partnerName}`,
         timestamp
       }),
       supabaseAdmin.from('diamond_history').insert({
@@ -72,8 +81,14 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
 export async function checkCallBalanceAction(uid: string, type: 'video' | 'voice') {
   const minRequired = type === 'video' ? 150 : 70;
   try {
-    const { data } = await supabaseAdmin.from('balances').select('coins').eq('user_id', uid).maybeSingle();
-    const coins = Number(data?.coins) || 0;
+    const { data: caller } = await supabaseAdmin.from('users').select('is_admin, is_coin_seller').eq('uid', uid).single();
+    
+    // Admins and Coin Sellers call for free
+    if (caller?.is_admin || caller?.is_coin_seller) return { success: true };
+
+    const { data: bal } = await supabaseAdmin.from('balances').select('coins').eq('user_id', uid).maybeSingle();
+    const coins = Number(bal?.coins) || 0;
+    
     if (coins < minRequired) return { success: false, error: "Low balance." };
     return { success: true };
   } catch (e: any) {

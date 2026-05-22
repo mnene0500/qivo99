@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, Suspense, useRef } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -292,12 +292,12 @@ function ChatsContent() {
     if (!isPrivileged && userProfile?.gender === 'male') {
       const balanceCheck = await checkCallBalanceAction(currentUser.id, type)
       if (!balanceCheck.success) {
-        toast({ variant: "destructive", title: "Insufficient Balance" })
+        toast({ variant: "destructive", title: "Insufficient Balance", description: balanceCheck.error })
         router.push("/recharge")
         return
       }
     }
-    router.push(`/call/${chatId}?type=${type}&partner=${encodeURIComponent(partnerProfile.name)}&partnerId=${startWithId}&partnerPhoto=${encodeURIComponent(partnerProfile.photo_url)}&caller=true`)
+    router.push(`/call/${chatId}?type=${type}&partner=${encodeURIComponent(partnerProfile.name)}&partnerId=${startWithId}&caller=true`)
   }
 
   const handleClearChat = async (targetId?: string) => {
