@@ -1,6 +1,6 @@
 # QIVO Production SQL (Secure with RLS)
 
-Run this entire script in your **Supabase SQL Editor** to initialize the economy, gifting, and calling systems.
+Run this entire script in your **Supabase SQL Editor** to initialize the economy, gifting, and calling systems. This script handles tables, real-time settings, and Row Level Security (RLS) with corrected policies for user onboarding.
 
 ```sql
 -- 1. SETUP HELPER FUNCTIONS
@@ -14,10 +14,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. CREATE TABLES
+-- 2. RESET TABLES
+DROP TABLE IF EXISTS public.users, public.balances, public.coin_history, public.diamond_history, public.processed_payments, public.chats, public.messages, public.agencies, public.withdrawals, public.reports CASCADE;
+
+-- 3. CREATE CORE TABLES
 CREATE TABLE public.users (
   uid UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT,
+  email TEXT UNIQUE,
   name TEXT,
   gender TEXT,
   dob DATE,
@@ -123,10 +126,10 @@ CREATE TABLE public.reports (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 3. ENABLE REALTIME
+-- 4. ENABLE REALTIME REPLICATION
 ALTER PUBLICATION supabase_realtime ADD TABLE public.balances, public.coin_history, public.diamond_history, public.chats, public.messages, public.users, public.withdrawals, public.reports;
 
--- 4. ENABLE RLS
+-- 5. ENABLE ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coin_history ENABLE ROW LEVEL SECURITY;
@@ -138,32 +141,39 @@ ALTER TABLE public.agencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
--- 5. DEFINE SECURITY POLICIES
+-- 6. DEFINE SECURITY POLICIES
 
 -- USERS
 CREATE POLICY "Public profiles are viewable by everyone" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Users can insert own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = uid);
 CREATE POLICY "Users can update own profile" ON public.users FOR UPDATE USING (auth.uid() = uid);
 
--- BALANCES (Secure: System-only updates via Server Actions)
+-- BALANCES
 CREATE POLICY "Users can view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own balance" ON public.balances FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own balance" ON public.balances FOR UPDATE USING (auth.uid() = user_id);
 
--- LEDGERS (Secure: User can see history, but not spoof entries)
+-- LEDGERS
 CREATE POLICY "Users can view own coin history" ON public.coin_history FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own coin history" ON public.coin_history FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can view own diamond history" ON public.diamond_history FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own diamond history" ON public.diamond_history FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- CHATS & MESSAGES
 CREATE POLICY "Participants can view chats" ON public.chats FOR SELECT USING (auth.uid() = ANY(participant_ids));
+CREATE POLICY "Participants can update chats" ON public.chats FOR UPDATE USING (auth.uid() = ANY(participant_ids));
+CREATE POLICY "Participants can insert chats" ON public.chats FOR INSERT WITH CHECK (auth.uid() = ANY(participant_ids));
+
 CREATE POLICY "Participants can view messages" ON public.messages FOR SELECT USING (EXISTS (
   SELECT 1 FROM public.chats WHERE id = chat_id AND auth.uid() = ANY(participant_ids)
 ));
 CREATE POLICY "Participants can send messages" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
--- FINANCIALS (Withdrawals/Payments)
+-- FINANCIALS
 CREATE POLICY "Users can view own withdrawals" ON public.withdrawals FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can view own payments" ON public.processed_payments FOR SELECT USING (auth.uid() = user_id);
 
--- 6. GRANT PERMISSIONS
+-- 7. GRANT PERMISSIONS
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
