@@ -24,6 +24,7 @@ interface UserProfile {
 
 /**
  * GLOBAL PERSISTENCE CACHE
+ * Prevents blink on tab switch and minimizes Supabase reads.
  */
 let globalUserCache: UserProfile[] = [];
 let globalScrollY = 0;
@@ -62,15 +63,22 @@ export default function HomePage() {
   }, [isInitialized, currentUser, authLoading, router])
 
   useEffect(() => {
-    if (!initialLoading) { setTimeout(() => window.scrollTo(0, globalScrollY), 50); }
+    // Restore scroll position when returning to this tab
+    if (!initialLoading) {
+      setTimeout(() => window.scrollTo(0, globalScrollY), 50);
+    }
     const handleScroll = () => { globalScrollY = window.scrollY }
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [initialLoading])
 
   const fetchUsers = useCallback(async (isManual = false) => {
-    if (isManual) { setIsRefreshing(true); globalScrollY = 0; } 
-    else if (users.length === 0) { setInitialLoading(true); }
+    if (isManual) {
+      setIsRefreshing(true);
+      globalScrollY = 0;
+    } else if (users.length === 0) {
+      setInitialLoading(true);
+    }
 
     try {
       const { data } = await supabase
@@ -121,23 +129,36 @@ export default function HomePage() {
           </h1>
         </div>
         <div className="flex items-center gap-4">
-          <button onClick={() => fetchUsers(true)} disabled={isRefreshing} className={cn("p-2 text-[#00A2FF]", isRefreshing && "animate-spin")}>
+          <button 
+            onClick={() => fetchUsers(true)} 
+            disabled={isRefreshing}
+            className={cn("p-2 text-[#00A2FF] transition-transform active:scale-90", isRefreshing && "animate-spin")}
+          >
             <RotateCw className="w-5 h-5" />
           </button>
         </div>
       </header>
 
       <div className="px-4 pt-6 space-y-6">
+        {/* QUICK ACTIONS */}
         <div className="grid grid-cols-2 gap-4">
-          <div onClick={() => router.push('/mystery-note')} className="bg-gradient-to-br from-[#00A2FF] to-[#0081CC] p-4 flex flex-col justify-between h-28 rounded-2xl shadow-lg cursor-pointer active:scale-95 transition-transform"><FileText className="w-5 h-5 text-white" /><h3 className="text-white font-black text-xs uppercase">Mystery Note</h3></div>
-          <div onClick={() => router.push('/tasks')} className="bg-gradient-to-br from-[#A88CFF] to-[#7B61FF] p-4 flex flex-col justify-between h-28 rounded-2xl shadow-lg cursor-pointer active:scale-95 transition-transform"><Target className="w-5 h-5 text-white" /><h3 className="text-white font-black text-xs uppercase">Task Center</h3></div>
+          <div onClick={() => router.push('/mystery-note')} className="bg-gradient-to-br from-[#00A2FF] to-[#0081CC] p-4 flex flex-col justify-between h-28 rounded-2xl shadow-lg cursor-pointer active:scale-95 transition-transform">
+            <FileText className="w-5 h-5 text-white" />
+            <h3 className="text-white font-black text-xs uppercase">Mystery Note</h3>
+          </div>
+          <div onClick={() => router.push('/tasks')} className="bg-gradient-to-br from-[#A88CFF] to-[#7B61FF] p-4 flex flex-col justify-between h-28 rounded-2xl shadow-lg cursor-pointer active:scale-95 transition-transform">
+            <Target className="w-5 h-5 text-white" />
+            <h3 className="text-white font-black text-xs uppercase">Task Center</h3>
+          </div>
         </div>
 
+        {/* FEED SELECTOR */}
         <div className="flex items-center gap-6 pb-2 border-b border-black/5">
-          <button onClick={() => setActiveTab('Recommend')} className={cn("text-xs font-black uppercase tracking-[0.2em]", activeTab === 'Recommend' ? "text-[#00A2FF]" : "text-gray-300")}>Recommend</button>
-          <button onClick={() => setActiveTab('Nearby')} className={cn("text-xs font-black uppercase tracking-[0.2em]", activeTab === 'Nearby' ? "text-[#00A2FF]" : "text-gray-300")}>Nearby</button>
+          <button onClick={() => setActiveTab('Recommend')} className={cn("text-xs font-black uppercase tracking-[0.2em] transition-colors", activeTab === 'Recommend' ? "text-[#00A2FF]" : "text-gray-300")}>Recommend</button>
+          <button onClick={() => setActiveTab('Nearby')} className={cn("text-xs font-black uppercase tracking-[0.2em] transition-colors", activeTab === 'Nearby' ? "text-[#00A2FF]" : "text-gray-300")}>Nearby</button>
         </div>
 
+        {/* MAIN FEED */}
         <main>
           {filteredUsers.length === 0 ? (
             <div className="py-20 text-center opacity-40">
@@ -147,8 +168,18 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {filteredUsers.map((u) => (
-                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.25] rounded-[2rem] shadow-xl bg-white group animate-in fade-in zoom-in-95" onClick={() => router.push(`/users/${u.uid}`)}>
-                  <Image src={u.photo_url || ""} alt={u.name} fill className="object-cover" />
+                <Card 
+                  key={u.uid} 
+                  className="relative overflow-hidden border-none aspect-[1/1.25] rounded-[2rem] shadow-xl bg-white group animate-in fade-in zoom-in-95"
+                  onClick={() => router.push(`/users/${u.uid}`)}
+                >
+                  <Image 
+                    src={u.photo_url || `https://picsum.photos/seed/${u.uid}/400/500`} 
+                    alt={u.name} 
+                    fill 
+                    className="object-cover"
+                    sizes="(max-width: 768px) 50vw, 25vw"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80" />
                   
                   {/* BRANDED CHAT BUTTON */}
@@ -160,8 +191,14 @@ export default function HomePage() {
                   </div>
 
                   <div className="absolute inset-x-0 bottom-0 p-4 text-white">
-                    <div className="flex items-center gap-1.5"><h4 className="font-bold text-sm truncate">{u.name}</h4>{u.is_verified && <BadgeCheck className="w-4 h-4 text-[#00A2FF] fill-white" />}</div>
-                    <div className="flex items-center gap-2 mt-1.5"><span className="bg-[#006400] text-white font-black text-[9px] px-2 py-0.5 rounded-lg">{calculateAge(u.dob)}</span><span className="text-white/60 text-[9px] font-bold uppercase tracking-tighter truncate">{u.country}</span></div>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-sm truncate">{u.name}</h4>
+                      {u.is_verified && <BadgeCheck className="w-4 h-4 text-[#00A2FF] fill-white" />}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="bg-[#006400] text-white font-black text-[9px] px-2 py-0.5 rounded-lg">{calculateAge(u.dob)}</span>
+                      <span className="text-white/60 text-[9px] font-bold uppercase tracking-tighter truncate">{u.country}</span>
+                    </div>
                   </div>
                 </Card>
               ))}

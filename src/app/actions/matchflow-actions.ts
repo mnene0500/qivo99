@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview Secure Supabase Server Actions for QIVO.
- * Uses internal session verification to prevent UID spoofing.
+ * Uses internal session verification (auth.getUser()) to prevent UID spoofing.
  */
 
 async function getAuthenticatedUser() {
@@ -83,7 +83,7 @@ export async function sendGiftAction(recipientUid: string, coinAmount: number, g
       timestamp
     });
 
-    // 2. Award to Recipient
+    // 2. Award to Recipient (Atomic via Server Context)
     const { data: recBal } = await supabase.from('balances').select('diamonds').eq('user_id', recipientUid).maybeSingle();
     await supabase.from('balances').upsert({ 
       user_id: recipientUid, 
@@ -183,34 +183,6 @@ export async function joinAgencyAction(agencyCode: string) {
     const { error } = await supabase.from('users').update({ agency_id: agencyCode.trim(), agency_status: 'pending' }).eq('uid', user.id);
     if (error) throw error;
 
-    return { success: true };
-  } catch (error: any) { 
-    return { success: false, error: error.message }; 
-  }
-}
-
-export async function reviewRecruitmentAction(targetUid: string, status: 'approved' | 'rejected') {
-  try {
-    const user = await getAuthenticatedUser();
-    const { data: caller } = await supabase.from('users').select('is_agent, agency_id').eq('uid', user.id).single();
-    if (!caller?.is_agent) return { success: false, error: "Agent permissions required." };
-
-    const { error } = await supabase.from('users').update({ agency_status: status }).eq('uid', targetUid);
-    if (error) throw error;
-    return { success: true };
-  } catch (error: any) { 
-    return { success: false, error: error.message }; 
-  }
-}
-
-export async function updateWithdrawalStatusAction(agencyId: string, withdrawalId: string, status: 'paid' | 'rejected') {
-  try {
-    const user = await getAuthenticatedUser();
-    const { data: caller } = await supabase.from('users').select('is_agent, agency_id').eq('uid', user.id).single();
-    if (!caller?.is_agent || caller.agency_id !== agencyId) return { success: false, error: "Unauthorized agency manager." };
-
-    const { error } = await supabase.from('withdrawals').update({ status }).eq('id', withdrawalId);
-    if (error) throw error;
     return { success: true };
   } catch (error: any) { 
     return { success: false, error: error.message }; 

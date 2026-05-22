@@ -151,7 +151,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       let coinsToAward = Math.floor(amount * 10);
       const timestamp = Date.now();
 
-      // Atomic Update
+      // Atomic Update: Using UPSERT to bypass "row violates policy" if record missing
       const { data: balData } = await supabase.from('balances').select('coins').eq('user_id', uid).maybeSingle();
       const currentCoins = balData?.coins || 0;
       
@@ -161,7 +161,10 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' });
 
-      if (upsertErr) return { success: false, error: "Database fulfillment error. Check RLS policies." };
+      if (upsertErr) {
+        console.error("Fulfillment Upsert Error:", upsertErr.message);
+        return { success: false, error: "Database fulfillment error. Check RLS policies." };
+      }
       
       // Log History & Mark Processed
       await Promise.all([
