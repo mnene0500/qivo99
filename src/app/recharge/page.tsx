@@ -12,10 +12,9 @@ import {
   History, 
   Users, 
   ArrowRight,
-  AlertCircle,
   ShieldCheck,
   CheckCircle2,
-  RefreshCw
+  Zap
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -49,7 +48,7 @@ function RechargeContent() {
   const [fulfillmentError, setFulfillmentError] = useState<string | null>(null)
   const [fulfillmentSuccess, setFulfillmentSuccess] = useState(false)
   
-  const [currentCoins, setCurrentCoins] = useState(0)
+  const [currentCoins, setCurrentCoins] = useState<number | null>(null)
   const [profile, setProfile] = useState<any>(null)
   
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -78,7 +77,8 @@ function RechargeContent() {
       .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
         const newBal = Number(payload.new.coins) || 0
         // If balance actually increased, we are DONE.
-        if (newBal > currentCoins && currentCoins > 0) {
+        // We use null check to ensure we have the baseline balance first
+        if (currentCoins !== null && newBal > currentCoins) {
           setCurrentCoins(newBal)
           setIsFulfilling(false)
           setFulfillmentSuccess(true)
@@ -93,7 +93,7 @@ function RechargeContent() {
     }
   }, [user?.id, currentCoins])
 
-  // 2. AGGRESSIVE AUTO-VERIFICATION LOOP
+  // 2. AGGRESSIVE SWIFT VERIFICATION LOOP
   const runSingleVerification = async () => {
     const orderId = searchParams.get("OrderTrackingId") || searchParams.get("orderTrackingId")
     const merchantRef = searchParams.get("OrderMerchantReference") || searchParams.get("orderMerchantReference")
@@ -106,8 +106,9 @@ function RechargeContent() {
         setFulfillmentSuccess(true);
         setIsFulfilling(false);
         if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-        toast({ title: "Success!", description: "Coins added to your wallet." });
-        setTimeout(() => router.replace("/profile"), 2500);
+        toast({ title: "Coins Received!", description: "Instant fulfillment complete." });
+        // Slower redirect to let success state sink in
+        setTimeout(() => router.replace("/profile"), 2000);
       }
     } catch (e) {
       console.error("Poll Error:", e);
@@ -120,20 +121,21 @@ function RechargeContent() {
 
     if (orderId && merchantRef && !fulfillmentSuccess) {
       setIsFulfilling(true);
-      // Run immediately
+      
+      // FIRST STRIKE: Check immediately
       runSingleVerification();
       
-      // Then poll every 3 seconds for 1 minute (20 attempts)
+      // SWIFT POLLING: Every 1.5 seconds for 45 seconds
       pollTimerRef.current = setInterval(() => {
         pollCountRef.current += 1;
-        if (pollCountRef.current > 20) {
+        if (pollCountRef.current > 30) { // 30 * 1.5s = 45s
           if (pollTimerRef.current) clearInterval(pollTimerRef.current);
           setIsFulfilling(false);
-          setFulfillmentError("Confirmation is taking a bit longer. We'll keep checking in the background.");
+          setFulfillmentError("Network delay. Coins will appear in your profile shortly.");
           return;
         }
         runSingleVerification();
-      }, 3000);
+      }, 1500);
     }
 
     return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current) };
@@ -162,47 +164,61 @@ function RechargeContent() {
     return <div className="flex-1 flex items-center justify-center h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
   }
 
-  // SHOW ACTIVE LOADING SCREEN IF VERIFYING
+  // ACTIVE SWIFT VERIFICATION SCREEN
   if (isFulfilling || fulfillmentSuccess || searchParams.get("OrderTrackingId")) {
     return (
-      <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-8 animate-in fade-in duration-500 select-none">
+      <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-10 animate-in fade-in duration-300 select-none">
         <div className="relative">
-          <div className="w-28 h-28 border-4 border-blue-50 rounded-full" />
-          {!fulfillmentSuccess ? (
-            <div className="w-28 h-28 border-4 border-[#00A2FF] border-t-transparent rounded-full animate-spin absolute inset-0" />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-green-500 animate-in zoom-in">
-              <CheckCircle2 className="w-20 h-20" />
-            </div>
+          <div className="w-32 h-32 border-4 border-blue-50 rounded-full flex items-center justify-center">
+            {fulfillmentSuccess ? (
+              <div className="text-green-500 animate-in zoom-in duration-500">
+                <CheckCircle2 className="w-20 h-20" />
+              </div>
+            ) : (
+              <Zap className="w-12 h-12 text-[#00A2FF] animate-pulse" />
+            )}
+          </div>
+          {!fulfillmentSuccess && (
+            <div className="w-32 h-32 border-4 border-[#00A2FF] border-t-transparent rounded-full animate-spin absolute inset-0" />
           )}
         </div>
         
         <div className="text-center space-y-3">
-          <h2 className="text-3xl font-black text-black tracking-tighter uppercase">
-            {fulfillmentSuccess ? "Payment Confirmed!" : "FAST VERIFYING..."}
+          <h2 className={cn(
+            "text-3xl font-black tracking-tighter uppercase italic",
+            fulfillmentSuccess ? "text-green-600" : "text-black"
+          )}>
+            {fulfillmentSuccess ? "COINS ADDED!" : "SWIFT VERIFYING"}
           </h2>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] leading-relaxed max-w-[240px] mx-auto">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em] leading-relaxed">
             {fulfillmentSuccess 
-              ? "Your coins have arrived. Enjoy!" 
-              : "Checking secure ledger. Do not close this page."}
+              ? "FULFILLMENT COMPLETE" 
+              : "EXECUTING SECURE LEDGER TASK"}
           </p>
         </div>
 
-        {fulfillmentSuccess && (
+        {fulfillmentSuccess ? (
           <Button 
             onClick={() => router.replace("/profile")}
-            className="rounded-full bg-black text-white font-black uppercase text-[10px] tracking-widest h-14 px-10 animate-in slide-in-from-bottom-2"
+            className="rounded-full bg-black text-white font-black uppercase text-[10px] tracking-widest h-16 px-12 animate-in slide-in-from-bottom-4 shadow-2xl"
           >
             Enter Wallet
           </Button>
-        )}
-
-        {fulfillmentError && !fulfillmentSuccess && (
-          <div className="text-center space-y-4">
-            <p className="text-xs font-bold text-amber-600 bg-amber-50 px-4 py-2 rounded-xl">{fulfillmentError}</p>
-            <Button variant="ghost" className="text-[10px] font-black text-gray-300 uppercase tracking-widest" onClick={() => router.replace("/profile")}>
-              Check Profile Anyway
-            </Button>
+        ) : (
+          <div className="flex flex-col items-center gap-6">
+            <div className="flex gap-1.5">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="w-1.5 h-1.5 bg-[#00A2FF] rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+              ))}
+            </div>
+            {fulfillmentError && (
+              <div className="text-center space-y-4 animate-in fade-in">
+                <p className="text-xs font-bold text-amber-600 bg-amber-50 px-6 py-3 rounded-2xl">{fulfillmentError}</p>
+                <Button variant="ghost" className="text-[10px] font-black text-gray-300 uppercase tracking-widest" onClick={() => router.replace("/profile")}>
+                  Check Profile
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -223,7 +239,7 @@ function RechargeContent() {
             <div className="relative z-10 space-y-1">
               <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-70">Current Balance</p>
               <div className="flex items-center gap-4">
-                <span className="text-6xl font-black tracking-tighter">{currentCoins}</span>
+                <span className="text-6xl font-black tracking-tighter">{currentCoins ?? "..."}</span>
                 <span className="text-xs font-bold opacity-60 uppercase tracking-widest">Coins</span>
               </div>
             </div>

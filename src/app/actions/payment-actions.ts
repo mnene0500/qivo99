@@ -91,14 +91,14 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
 }
 
 /**
- * ATOMIC FULFILLMENT: Awards coins and prevents double-processing.
- * Can be called by the client UI OR the background IPN webhook.
+ * ATOMIC SWIFT FULFILLMENT: Awards coins and prevents double-processing.
+ * Optimized for maximum speed by checking internal ledger first.
  */
 export async function fulfillPaymentAction(orderTrackingId: string, merchantReference: string) {
   try {
     if (!orderTrackingId || !merchantReference) return { success: false, error: "Missing tracking ID or reference." };
 
-    // 1. IDEMPOTENCY CHECK: Have we already processed this specific PesaPal tracking ID?
+    // 1. SWIFT LEDGER CHECK: If already processed, return immediately (zero latency)
     const { data: existing } = await supabaseAdmin
       .from('processed_payments')
       .select('coins')
@@ -106,11 +106,10 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       .maybeSingle();
       
     if (existing) {
-      console.log(`[Payment] Order ${orderTrackingId} already fulfilled.`);
       return { success: true, coins: existing.coins };
     }
 
-    // 2. VERIFY WITH PESAPAL: Get the actual status from the source
+    // 2. VERIFY WITH PESAPAL: Get status from source
     const token = await getAccessToken();
     const statusRes = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`, {
       method: 'GET',
@@ -137,18 +136,12 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
 
       const timestamp = Date.now();
       
-      // 3. GET CURRENT BALANCE
-      const { data: balData } = await supabaseAdmin.from('balances').select('coins').eq('user_id', uid).maybeSingle();
-      const currentCoins = Number(balData?.coins) || 0;
-      
-      // 4. ATOMIC UPDATES via Admin Client
-      const { error: balErr } = await supabaseAdmin.from('balances').upsert({ 
-        user_id: uid, 
-        coins: currentCoins + coinsToAward,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
-
-      if (balErr) throw balErr;
+      // 3. ATOMIC UPDATES via Admin Client
+      // We use RPC or Upsert to ensure we don't need a separate SELECT call first
+      const { error: balErr } = await supabaseAdmin.rpc('increment_coins', { 
+        user_uid: uid, 
+        amount: coinsToAward 
+      });
 
       // Log both history and processing record
       await Promise.all([
