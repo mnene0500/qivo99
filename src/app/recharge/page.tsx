@@ -33,6 +33,10 @@ const PACKAGES = [
   { amount: 20000, price: 1800.0 },
 ]
 
+/**
+ * @fileOverview Secure Recharge Page.
+ * Coins are ONLY awarded after backend status verification.
+ */
 function RechargeContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -49,10 +53,12 @@ function RechargeContent() {
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null)
   const successTriggeredRef = useRef(false)
 
+  // Track transaction parameters from PesaPal redirect
   const orderId = searchParams.get("OrderTrackingId") || searchParams.get("orderTrackingId")
   const merchantRef = searchParams.get("OrderMerchantReference") || searchParams.get("orderMerchantReference")
   const hasOrderParams = !!orderId && !!merchantRef
 
+  // 1. Initial balance fetch & Real-time update listener
   useEffect(() => {
     if (!user?.id) return
     
@@ -62,20 +68,21 @@ function RechargeContent() {
     }
     fetchData()
 
-    const channel = supabase.channel(`recharge-pulse:${user.id}`)
+    const channel = supabase.channel(`recharge-sync:${user.id}`)
       .on('postgres_changes', { 
         event: 'UPDATE', 
         table: 'balances', 
         filter: `user_id=eq.${user.id}` 
       }, (payload) => {
         const newBal = Number(payload.new.coins) || 0
+        // SUCCESS: If balance increases while we are on this page, payment verified!
         if (currentCoins !== null && newBal > currentCoins && !successTriggeredRef.current) {
           successTriggeredRef.current = true
           setFulfillmentSuccess(true)
           setIsFulfilling(false)
           if (pollTimerRef.current) clearInterval(pollTimerRef.current)
           
-          // Force close after a short delay to show the "Success" screen
+          // Close and return to profile after celebration
           setTimeout(() => {
              router.replace('/profile')
           }, 3000)
@@ -89,23 +96,39 @@ function RechargeContent() {
     }
   }, [user?.id, currentCoins, router])
 
+  // 2. VERIFICATION LOGIC: Polling the backend for transaction status
   useEffect(() => {
     if (orderId && merchantRef && !fulfillmentSuccess && !successTriggeredRef.current) {
-      setIsFulfilling(true)
-      const verify = async () => {
-        if (successTriggeredRef.current) return
-        const res = await fulfillPaymentAction(orderId, merchantRef)
-        if (res.success && !successTriggeredRef.current) {
-          successTriggeredRef.current = true
-          setFulfillmentSuccess(true)
-          setIsFulfilling(false)
+      setIsFulfilling(true);
+
+      const verifyStatus = async () => {
+        if (successTriggeredRef.current) {
+          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+          return;
         }
-      }
-      verify()
-      pollTimerRef.current = setInterval(verify, 3000)
+        
+        // Backend verification call
+        const res = await fulfillPaymentAction(orderId, merchantRef);
+
+        if (res.success && res.verified && !successTriggeredRef.current) {
+          // verification handled by balance listener, but we can force state here
+        } else if (res.error) {
+          // If the backend definitively rejects, stop polling
+          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+          toast({ variant: "destructive", title: "Verification Failed", description: res.error });
+          router.replace('/recharge');
+        }
+      };
+
+      // Poll every 5 seconds until balance updates or we navigate away
+      verifyStatus();
+      pollTimerRef.current = setInterval(verifyStatus, 5000);
     }
-    return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current) }
-  }, [orderId, merchantRef, fulfillmentSuccess])
+
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+  }, [orderId, merchantRef, fulfillmentSuccess, router, toast]);
 
   const handlePayment = async () => {
     const pkg = PACKAGES.find(p => p.amount === selectedPackage)
@@ -118,24 +141,21 @@ function RechargeContent() {
         name: user.user_metadata?.full_name || "QIVO User"
       })
       if (result.success && result.redirect_url) {
-        setPaymentUrl(result.redirect_url)
+        // Step 1: Redirect user to payment provider
+        window.location.href = result.redirect_url;
       } else {
         toast({ variant: "destructive", title: "Error", description: result.error })
       }
     } catch (err) {
-      toast({ variant: "destructive", title: "Connection failed." })
+      toast({ variant: "destructive", title: "Gateway Error", description: "Could not connect to payment service." })
     } finally {
       setLoading(false)
     }
   }
 
-  const handleCloseSuccess = () => {
-    router.replace('/profile')
-  }
-
   if (authLoading || !isInitialized) return <div className="flex-1 flex items-center justify-center h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
 
-  // FULFILLMENT / VERIFICATION VIEW
+  // VERIFICATION VIEW (Wait for IPN or status check)
   if (isFulfilling || fulfillmentSuccess || hasOrderParams) {
     return (
       <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-10 animate-in fade-in duration-300">
@@ -155,14 +175,12 @@ function RechargeContent() {
           <h2 className={cn("text-3xl font-black italic tracking-tighter uppercase", fulfillmentSuccess ? "text-green-600" : "text-black")}>
             {fulfillmentSuccess ? "COINS ADDED!" : "VERIFYING..."}
           </h2>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em]">{fulfillmentSuccess ? "FULFILLMENT COMPLETE" : "STAY ON THIS PAGE"}</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em]">
+            {fulfillmentSuccess ? "TRANSACTION COMPLETE" : "DO NOT REFRESH THIS PAGE"}
+          </p>
         </div>
-        {fulfillmentSuccess ? (
-          <Button onClick={handleCloseSuccess} className="rounded-full bg-black text-white font-black uppercase text-[10px] tracking-widest h-16 px-12 shadow-2xl animate-in slide-in-from-bottom-4">Return to App</Button>
-        ) : (
-          <Button variant="ghost" onClick={() => router.replace('/recharge')} className="text-gray-300 font-bold uppercase text-[9px] tracking-widest gap-2">
-             <X className="w-3 h-3" /> Cancel Verification
-          </Button>
+        {fulfillmentSuccess && (
+          <Button onClick={() => router.replace('/profile')} className="rounded-full bg-black text-white font-black uppercase text-[10px] tracking-widest h-16 px-12 shadow-2xl animate-in slide-in-from-bottom-4">Return to App</Button>
         )}
       </div>
     )
@@ -172,7 +190,7 @@ function RechargeContent() {
     <div className="flex-1 bg-[#F9FAFB] min-h-screen flex flex-col select-none">
       <header className="px-4 h-16 flex items-center justify-between bg-white border-b sticky top-0 z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
-        <h1 className="text-sm font-black text-black uppercase tracking-widest">My Wallet</h1>
+        <h1 className="text-sm font-black text-black uppercase tracking-widest">Recharge</h1>
         <Button variant="ghost" size="icon" onClick={() => router.push("/coin-history")} className="rounded-full"><History className="w-5 h-5 text-black" /></Button>
       </header>
 
@@ -181,7 +199,7 @@ function RechargeContent() {
           <div className="bg-gradient-to-br from-[#00A2FF] to-[#0066CC] rounded-[2.5rem] p-8 shadow-2xl text-white relative overflow-hidden">
             <Zap className="absolute -right-4 -bottom-4 w-32 h-32 opacity-10 rotate-12" />
             <div className="relative z-10">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-70">Current Balance</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-70">Wallet Balance</p>
               <div className="flex items-center gap-4 mt-1"><span className="text-6xl font-black tracking-tighter">{currentCoins ?? "..."}</span><span className="text-xs font-bold opacity-60 uppercase tracking-widest">Coins</span></div>
             </div>
           </div>
@@ -189,7 +207,7 @@ function RechargeContent() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 px-1">
               <ShieldCheck className="w-4 h-4 text-[#00A2FF]" />
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Package</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choose a Package</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {PACKAGES.map((p) => (
@@ -223,35 +241,9 @@ function RechargeContent() {
           className="w-full h-16 rounded-full bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl active:scale-95 transition-all" 
           onClick={handlePayment}
         >
-          {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : selectedPackage ? `Pay KES ${PACKAGES.find(p => p.amount === selectedPackage)?.price}` : "Select a Package"}
+          {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : selectedPackage ? `Pay KES ${PACKAGES.find(p => p.amount === selectedPackage)?.price}` : "Select Package"}
         </Button>
       </footer>
-
-      <Dialog open={!!paymentUrl} onOpenChange={(open) => !open && setPaymentUrl(null)}>
-        <DialogContent className="max-w-none w-full h-[100dvh] p-0 border-none bg-white rounded-none flex flex-col z-[9999] [&>button]:hidden">
-          <DialogTitle className="sr-only">Secure Checkout</DialogTitle>
-          <div className="h-14 bg-white border-b flex items-center px-4">
-             <Button variant="ghost" size="sm" onClick={() => setPaymentUrl(null)} className="rounded-full font-bold text-[10px] uppercase gap-2">
-               <ChevronLeft className="w-4 h-4" /> Cancel
-             </Button>
-             <div className="flex-1 flex justify-center items-center gap-2">
-                <Zap className="w-4 h-4 text-green-500" />
-                <span className="text-[9px] font-black uppercase tracking-widest">Secure Checkout</span>
-             </div>
-             <div className="w-20" />
-          </div>
-          <div className="flex-1 relative bg-gray-50">
-            {paymentUrl && (
-              <iframe 
-                src={paymentUrl} 
-                className="absolute inset-0 w-full h-full border-none" 
-                title="Checkout" 
-                allow="payment" 
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

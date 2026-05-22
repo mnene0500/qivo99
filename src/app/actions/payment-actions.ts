@@ -1,11 +1,12 @@
+
 'use server';
 
 import { supabase } from '@/lib/supabase';
 import { PESAPAL_CONFIG } from '@/lib/pesapal-config';
+import { processFulfillment } from '@/services/payment-service';
 
 /**
  * @fileOverview Secure PesaPal Proxies via Supabase Edge Functions.
- * These actions bridge the frontend to the protected environment where API keys reside.
  */
 
 export async function initiatePesaPalPayment(amount: number, user: { uid: string, email: string, name: string }) {
@@ -34,29 +35,30 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
 }
 
 /**
- * Manual fulfillment check. Usually triggered by the user returning to the app
- * before the IPN webhook arrives.
+ * Server Action wrapper for fulfillment.
  */
 export async function fulfillPaymentAction(orderTrackingId: string, merchantReference: string) {
-  try {
-    console.log(`[Fulfillment] Verifying order: ${orderTrackingId}`);
-    
-    const { data, error } = await supabase.functions.invoke('payment-ops', {
-      body: { 
-        action: 'fulfill',
-        orderTrackingId,
-        merchantReference
-      }
-    });
+  return processFulfillment(orderTrackingId, merchantReference);
+}
 
-    if (error) {
-      // Don't throw error here, just return failure so the UI keeps polling
-      return { success: false, error: error.message };
-    }
-    
-    return data || { success: false };
-  } catch (err: any) { 
-    console.error("[Fulfillment Error]:", err);
-    return { success: false, error: "Verification in progress..." }; 
-  }
+/**
+ * Registers the IPN URL for the current environment with PesaPal.
+ */
+export async function registerIPN() {
+  const { data, error } = await supabase.functions.invoke('payment-ops', {
+    body: { action: 'register_ipn' }
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * Retrieves a list of all registered IPNs from PesaPal.
+ */
+export async function getIpnList() {
+  const { data, error } = await supabase.functions.invoke('payment-ops', {
+    body: { action: 'get_ipns' }
+  });
+  if (error) throw new Error(error.message);
+  return data;
 }

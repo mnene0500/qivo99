@@ -2,8 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * @fileOverview Central Supabase Client for the browser.
- * Configured to use public environment variables for the frontend.
+ * @fileOverview Central Supabase Client for the browser and server.
+ * Configured to use public environment variables.
  * Critical secrets are handled via Edge Function invocation.
  */
 
@@ -11,10 +11,12 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  console.warn("⚠️ Supabase credentials missing! The app will not function correctly until NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in Vercel Environment Variables.");
+  if (typeof window !== 'undefined') {
+    console.warn("⚠️ Supabase credentials missing! The app will not function correctly until NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set.");
+  }
 }
 
-// Browser Client
+// Browser & Server Client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
@@ -62,7 +64,6 @@ export async function uploadBase64Image(base64: string, bucket: string, path: st
 
     // 5. Retrieve Public URL
     const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path);
-    console.log(`[Storage] Upload complete. Public URL: ${publicUrl}`);
     return publicUrl;
   } catch (err: any) {
     console.error("[Storage Crash] Upload process failed:", err.message);
