@@ -223,7 +223,7 @@ export default function MePage() {
     return <div className="flex-1 bg-[#F8F9FA] min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
   }
 
-  // Use unique key and cache buster to force sudden visual update
+  // Visual Cache Buster ensure instant refresh
   const freshPhotoUrl = profile?.photo_url ? `${profile.photo_url}?t=${Date.now()}` : null;
   
   return (
@@ -234,7 +234,7 @@ export default function MePage() {
         <header className="relative pt-12 pb-10 px-6 flex flex-col items-center text-center">
           <div className="absolute top-6 right-6">
             <div className="bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
-              <span className="text-[9px] font-bold text-white uppercase tracking-widest">
+              <span className="text-[9px] font-black text-white uppercase tracking-widest">
                 {profile?.is_admin ? "ADMIN" : (profile?.is_agent ? "AGENT" : (profile?.is_verified ? "VERIFIED" : "MEMBER"))}
               </span>
             </div>

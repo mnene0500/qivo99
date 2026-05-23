@@ -1,7 +1,7 @@
 
 # QIVO Production SQL (Run in SQL Editor)
 
-This script sets up all tables and ensures history triggers, balance helpers, and security policies are ready.
+This script is idempotent. It will set up all tables and security without crashing if run multiple times.
 
 ```sql
 -- 1. SETUP ATOMIC HELPERS
@@ -80,6 +80,15 @@ CREATE TABLE IF NOT EXISTS public.diamond_history (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
+CREATE TABLE IF NOT EXISTS public.processed_payments (
+  order_tracking_id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  amount NUMERIC,
+  coins BIGINT,
+  payment_method TEXT,
+  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+);
+
 CREATE TABLE IF NOT EXISTS public.chats (
   id TEXT PRIMARY KEY,
   participant_ids UUID[] NOT NULL,
@@ -98,6 +107,23 @@ CREATE TABLE IF NOT EXISTS public.messages (
   is_gift BOOLEAN DEFAULT FALSE
 );
 
+CREATE TABLE IF NOT EXISTS public.agencies (
+  code TEXT PRIMARY KEY,
+  agent_uid UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.withdrawals (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  agency_id TEXT REFERENCES public.agencies(code) ON DELETE CASCADE,
+  diamonds NUMERIC,
+  amount_kes NUMERIC,
+  status TEXT DEFAULT 'pending',
+  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+);
+
 CREATE TABLE IF NOT EXISTS public.reports (
   id BIGSERIAL PRIMARY KEY,
   reporter_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
@@ -109,58 +135,74 @@ CREATE TABLE IF NOT EXISTS public.reports (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
-CREATE TABLE IF NOT EXISTS public.withdrawals (
-  id BIGSERIAL PRIMARY KEY,
-  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
-  agency_id TEXT,
-  diamonds NUMERIC,
-  amount_kes NUMERIC,
-  status TEXT DEFAULT 'pending',
-  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
-);
-
-CREATE TABLE IF NOT EXISTS public.agencies (
-  code TEXT PRIMARY KEY,
-  agent_uid UUID REFERENCES public.users(uid) ON DELETE CASCADE,
-  name TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- 3. ENABLE RLS & POLICIES
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coin_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.diamond_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.processed_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.agencies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
--- Profiles
+-- CLEANUP OLD POLICIES
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.users;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
+DROP POLICY IF EXISTS "Public profiles viewable" ON public.users;
+DROP POLICY IF EXISTS "Users insert own profile" ON public.users;
+DROP POLICY IF EXISTS "Users view own balance" ON public.balances;
+DROP POLICY IF EXISTS "Users update own balance" ON public.balances;
+DROP POLICY IF EXISTS "Participants view chats" ON public.chats;
+DROP POLICY IF EXISTS "Participants send messages" ON public.messages;
+
+-- RE-APPLY HARDENED POLICIES
 CREATE POLICY "Public profiles viewable" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Users insert own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = uid);
 CREATE POLICY "Users update own profile" ON public.users FOR UPDATE USING (auth.uid() = uid) WITH CHECK (auth.uid() = uid);
 
--- Balances
 CREATE POLICY "Users view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users update own balance" ON public.balances FOR UPDATE USING (auth.uid() = user_id);
 
--- Chats & Messages
 CREATE POLICY "Participants view chats" ON public.chats FOR SELECT USING (auth.uid() = ANY(participant_ids));
 CREATE POLICY "Participants send messages" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
 CREATE POLICY "Participants view messages" ON public.messages FOR SELECT USING (EXISTS (
   SELECT 1 FROM public.chats WHERE id = messages.chat_id AND auth.uid() = ANY(participant_ids)
 ));
 
--- Storage Bucket RLS (Bucket: photos)
--- Public read access
-CREATE POLICY "Public Read Photos" ON storage.objects FOR SELECT USING (bucket_id = 'photos');
--- User manage own folder
-CREATE POLICY "Users manage own photos" ON storage.objects FOR ALL USING (
-  bucket_id = 'photos' AND (storage.foldername(name))[1] = auth.uid()::text
-);
-
--- 4. ENABLE REALTIME
-ALTER PUBLICATION supabase_realtime ADD TABLE public.balances, public.coin_history, public.diamond_history, public.users, public.reports, public.chats, public.messages, public.withdrawals;
+-- 4. ENABLE REALTIME (SAFE)
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+  
+  -- Add tables individually with checks to prevent 42710
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'users') THEN 
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.users; 
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'balances') THEN 
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.balances; 
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'chats') THEN 
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.chats; 
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'messages') THEN 
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.messages; 
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'coin_history') THEN 
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.coin_history; 
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'diamond_history') THEN 
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.diamond_history; 
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'withdrawals') THEN 
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.withdrawals; 
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'reports') THEN 
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.reports; 
+  END IF;
+END $$;
 ```
