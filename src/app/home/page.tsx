@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
@@ -104,11 +103,9 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
-      <header className="bg-[#00A2FF] h-10 relative overflow-hidden flex items-center px-6 justify-between">
-        <h1 className="absolute -bottom-4 left-4 text-7xl font-black text-white opacity-5 -rotate-12 pointer-events-none select-none uppercase">QIVO</h1>
-      </header>
+      <header className="bg-[#00A2FF] h-4 relative overflow-hidden flex items-center px-6 justify-between" />
 
-      <div className="relative px-4 grid grid-cols-2 gap-3 -mt-2 z-20 mb-4">
+      <div className="relative px-4 grid grid-cols-2 gap-3 -mt-4 z-20 mb-4">
         <button 
           onClick={() => router.push('/mystery-note')} 
           className="h-28 bg-gradient-to-br from-[#00A2FF] to-[#0081CC] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"

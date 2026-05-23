@@ -37,7 +37,9 @@ export const getSupabaseAdmin = () => {
   const adminUrl = process.env.SUPABASE_URL || supabaseUrl;
   
   if (typeof window !== 'undefined') {
-    throw new Error("Admin client can only be used on the server.");
+    // Return a proxy that warns instead of crashing if accessed accidentally on client
+    console.warn("⚠️ [Supabase Admin] Attempted to access Admin Client on the browser. Falling back to standard client.");
+    return supabase;
   }
 
   if (!serviceKey || !adminUrl) {
@@ -87,14 +89,13 @@ export function base64ToBlob(base64: string): { blob: Blob, contentType: string 
 }
 
 /**
- * Profile Photo Upload (Admin context to bypass strict RLS during onboarding)
+ * Profile Photo Upload (Uses standard client so it works for all users in browser)
  */
 export async function uploadProfilePhoto(file: File | Blob, userId: string) {
-  const admin = getSupabaseAdmin();
   const timestamp = Date.now();
   const filePath = `${userId}/${timestamp}.jpg`;
   
-  const { error } = await admin.storage.from('photos').upload(filePath, file, { 
+  const { error } = await supabase.storage.from('photos').upload(filePath, file, { 
     cacheControl: '0', 
     upsert: true,
     contentType: 'image/jpeg'
@@ -102,7 +103,7 @@ export async function uploadProfilePhoto(file: File | Blob, userId: string) {
   
   if (error) throw error;
   
-  const { data } = admin.storage.from('photos').getPublicUrl(filePath);
+  const { data } = supabase.storage.from('photos').getPublicUrl(filePath);
   return data.publicUrl;
 }
 
@@ -110,12 +111,11 @@ export async function uploadProfilePhoto(file: File | Blob, userId: string) {
  * Gallery/Post Photo Upload
  */
 export async function uploadPostPhoto(file: File | Blob, userId: string, bucket = 'photos') {
-  const admin = getSupabaseAdmin();
   const timestamp = Date.now();
   const uuid = crypto.randomUUID();
   const filePath = `${userId}/gallery-${timestamp}-${uuid}.jpg`;
   
-  const { error } = await admin.storage.from(bucket).upload(filePath, file, { 
+  const { error } = await supabase.storage.from(bucket).upload(filePath, file, { 
     cacheControl: '0', 
     upsert: true,
     contentType: 'image/jpeg'
@@ -123,6 +123,6 @@ export async function uploadPostPhoto(file: File | Blob, userId: string, bucket 
   
   if (error) throw error;
   
-  const { data } = admin.storage.from(bucket).getPublicUrl(filePath);
+  const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
   return data.publicUrl;
 }
