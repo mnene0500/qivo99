@@ -1,40 +1,39 @@
 
 import { NextResponse } from 'next/server';
-import { registerIPN, getIpnList } from '@/app/actions/payment-actions';
 import { PESAPAL_CONFIG } from '@/lib/pesapal-config';
 
 /**
- * @fileOverview Setup tool to retrieve IPN ID from PesaPal Live.
- * Runs on the server to help admins register their domain.
+ * @fileOverview Diagnostic tool to help register IPN on Vercel.
  */
 export async function GET() {
+  const consumerKey = process.env.PESAPAL_CONSUMER_KEY;
+  const consumerSecret = process.env.PESAPAL_CONSUMER_SECRET;
+
+  if (!consumerKey || !consumerSecret) {
+    return NextResponse.json({ error: "Missing Environment Variables in Vercel" }, { status: 500 });
+  }
+
   try {
-    // 1. Try to register the IPN for the current domain
-    const registrationAttempt = await registerIPN();
-    
-    // 2. Fetch all currently registered IPNs for this account
-    const ipnList = await getIpnList();
-
-    // 3. Search for the IPN ID that matches our specific production callback URL
-    const currentIpn = Array.isArray(ipnList) 
-      ? ipnList.find((item: any) => item.url === PESAPAL_CONFIG.IPN_URL)
-      : null;
-
-    return NextResponse.json({
-      message: "PesaPal Live Diagnostics",
-      status: "Connected",
-      target_url: PESAPAL_CONFIG.IPN_URL,
-      instruction: currentIpn 
-        ? `SUCCESS! Your IPN ID is found. Copy the 'recommended_ipn_id' value below into your Vercel Environment Variables as PESAPAL_IPN_ID.` 
-        : `Check 'currently_registered_ipns' below.`,
-      recommended_ipn_id: currentIpn?.ipn_id || "Not found yet",
-      registration_attempt: registrationAttempt,
-      currently_registered_ipns: ipnList
+    const authRes = await fetch("https://pay.pesapal.com/v3/api/Auth/RequestToken", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consumer_key: consumerKey, consumer_secret: consumerSecret }),
     });
-  } catch (error: any) {
+    const { token } = await authRes.json();
+
+    const regRes = await fetch("https://pay.pesapal.com/v3/api/URLSetup/RegisterIPN", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ url: PESAPAL_CONFIG.IPN_URL, ipn_notification_type: "GET" }),
+    });
+    const regData = await regRes.json();
+
     return NextResponse.json({
-      error: "Diagnostics Failed",
-      message: error.message
-    }, { status: 500 });
+      status: "Connected to PesaPal",
+      registration: regData,
+      instruction: "If registration was successful, copy the 'ipn_id' from the response above and add it to your Vercel Env as PESAPAL_IPN_ID."
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
