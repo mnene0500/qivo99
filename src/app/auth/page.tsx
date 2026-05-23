@@ -36,7 +36,6 @@ export default function UnifiedAuthPage() {
     if (!email || !password) return
     setLoading(true)
     try {
-      // This now hits /api/supabase/auth/v1/... instead of the real URL
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
       
@@ -44,7 +43,7 @@ export default function UnifiedAuthPage() {
       router.push("/home")
     } catch (error: any) {
       console.error("[Login Error]:", error.message)
-      toast({ variant: "destructive", title: "Login failed", description: "Verify your credentials and network connection." })
+      toast({ variant: "destructive", title: "Login failed", description: error.message })
     } finally {
       setLoading(false)
     }
@@ -53,11 +52,11 @@ export default function UnifiedAuthPage() {
   const handleGoogleLogin = async () => {
     setSocialLoading(true)
     try {
-      const redirectTo = `${window.location.origin}/home`
+      // PKCE Flow is handled automatically by the proxy redirect
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo,
+          redirectTo: `${window.location.origin}/home`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',

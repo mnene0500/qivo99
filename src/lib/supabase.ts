@@ -2,9 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * @fileOverview Secure Supabase Client with Zero NEXT_PUBLIC requirement.
- * On the server: Uses real environment variables.
- * On the client: Routes requests through a secure local API proxy.
+ * @fileOverview Secure Supabase Client with ZERO NEXT_PUBLIC requirement.
+ * Routes all client traffic through a local server-side proxy.
  */
 
 const isServer = typeof window === 'undefined';
@@ -12,17 +11,26 @@ const isServer = typeof window === 'undefined';
 const getSupabaseConfig = () => {
   if (isServer) {
     // SERVER SIDE: Access real secrets
+    // We throw errors here if missing to prevent DNS "placeholder" errors
+    const url = process.env.SUPABASE_URL;
+    const anonKey = process.env.SUPABASE_ANON_KEY;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || anonKey;
+
+    if (!url || !anonKey) {
+      console.warn("⚠️ [Supabase] Missing Environment Variables on Server.");
+    }
+
     return {
-      url: process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
-      anonKey: process.env.SUPABASE_ANON_KEY || 'placeholder',
-      serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'placeholder'
+      url: url || 'https://missing-url.local',
+      anonKey: anonKey || 'missing-key',
+      serviceKey: serviceKey || 'missing-key'
     };
   } else {
     // CLIENT SIDE: Use the secure local proxy
-    // This hides your real Supabase URL and Key from the browser
+    // No external URLs or keys are exposed to the browser
     return {
       url: `${window.location.origin}/api/supabase`,
-      anonKey: 'proxy-auth-active', // The proxy will inject the real key on the server
+      anonKey: 'proxy-auth-active',
       serviceKey: 'proxy-auth-active'
     };
   }
@@ -36,7 +44,8 @@ export const supabase = createClient(config.url, config.anonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storage: !isServer ? window.localStorage : undefined
+    storage: !isServer ? window.localStorage : undefined,
+    flowType: 'pkce'
   }
 });
 

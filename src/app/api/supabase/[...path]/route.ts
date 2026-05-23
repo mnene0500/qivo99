@@ -2,9 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * @fileOverview Secure Supabase Proxy Route.
- * This acts as a middleman that adds your private keys to every request.
- * The user's browser never sees your SUPABASE_URL or SUPABASE_ANON_KEY.
+ * @fileOverview Hardened Supabase Proxy.
+ * Handles Auth redirects and injects private keys on the server.
  */
 
 export async function GET(req: NextRequest) { return handleProxy(req); }
@@ -18,34 +17,34 @@ async function handleProxy(req: NextRequest) {
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.json({ error: "Supabase configuration missing on server." }, { status: 500 });
+    return NextResponse.json({ 
+      error: "Supabase configuration missing on Vercel.",
+      details: "Ensure SUPABASE_URL and SUPABASE_ANON_KEY are set in Vercel Settings."
+    }, { status: 500 });
   }
 
-  // Extract the target path (e.g., /auth/v1/token or /rest/v1/users)
   const url = new URL(req.url);
   const path = url.pathname.replace('/api/supabase', '');
   const searchParams = url.search;
   
   const targetUrl = `${supabaseUrl}${path}${searchParams}`;
 
-  // Forward the headers, but override the ones for Supabase
   const headers = new Headers(req.headers);
   headers.set('apikey', supabaseAnonKey);
   
-  // If the client sent a generic 'proxy-auth-active' auth header, replace it with the real key
-  // unless they provided their own user token (Bearer)
   const authHeader = req.headers.get('Authorization');
   if (!authHeader || authHeader.includes('proxy-auth-active')) {
     headers.set('Authorization', `Bearer ${supabaseAnonKey}`);
   }
 
-  // Remove host header to prevent SSL mismatches
   headers.delete('host');
+  headers.delete('connection');
 
   try {
     const fetchOptions: RequestInit = {
       method: req.method,
       headers: headers,
+      redirect: 'manual', // We handle redirects manually to ensure client receives them
     };
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -54,10 +53,17 @@ async function handleProxy(req: NextRequest) {
 
     const response = await fetch(targetUrl, fetchOptions);
     
-    // Create the response from the Supabase result
+    // Handle redirects (for OAuth/Google Login)
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (location) {
+        return NextResponse.redirect(location, response.status);
+      }
+    }
+
     const resHeaders = new Headers(response.headers);
-    // Don't leak Supabase internal headers
     resHeaders.delete('content-encoding'); 
+    resHeaders.delete('transfer-encoding');
     
     return new NextResponse(response.body, {
       status: response.status,
@@ -66,6 +72,6 @@ async function handleProxy(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("[Supabase Proxy Error]:", error.message);
-    return NextResponse.json({ error: "Failed to reach Supabase via Proxy." }, { status: 502 });
+    return NextResponse.json({ error: "Supabase unreachable via proxy." }, { status: 502 });
   }
 }
