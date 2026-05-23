@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -22,7 +23,8 @@ import {
   Wallet,
   Shield,
   User,
-  Flag
+  Flag,
+  PlusCircle
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -274,19 +276,20 @@ export default function MePage() {
 
         <main className="px-6 space-y-6">
           <div className="grid grid-cols-2 gap-4 relative z-20 -mt-6">
-            <Button className="h-20 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1 text-[#00A2FF]">
-              <div className="flex items-center gap-1.5">
-                <CircleDollarSign className="w-5 h-5" />
-                <span className="text-sm font-bold">{balances.coins}</span>
+            <Button className="h-24 bg-white rounded-[2rem] shadow-xl flex flex-col items-center justify-center gap-1 text-[#00A2FF] relative overflow-hidden group" onClick={() => router.push('/recharge')}>
+              <div className="flex items-center gap-2">
+                <div className="bg-blue-50 p-2 rounded-xl group-hover:scale-110 transition-transform"><PlusCircle className="w-5 h-5" /></div>
+                <span className="text-lg font-black">{balances.coins}</span>
               </div>
-              <span className="text-[8px] font-bold uppercase opacity-60">Wallet Balance</span>
+              <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Recharge Coins</span>
+              <div className="absolute top-0 right-0 p-1.5"><Zap className="w-3 h-3 text-yellow-400 fill-current" /></div>
             </Button>
-            <Button className="h-20 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1 text-black" onClick={() => router.push("/income")}>
-              <div className="flex items-center gap-1.5">
-                <Gem className="w-5 h-5 text-[#4285F4]" />
-                <span className="text-sm font-bold">{balances.diamonds.toFixed(0)}</span>
+            <Button className="h-24 bg-white rounded-[2rem] shadow-xl flex flex-col items-center justify-center gap-1 text-black" onClick={() => router.push("/income")}>
+              <div className="flex items-center gap-2">
+                <div className="bg-purple-50 p-2 rounded-xl"><Gem className="w-5 h-5 text-[#4285F4]" /></div>
+                <span className="text-lg font-black">{balances.diamonds.toFixed(0)}</span>
               </div>
-              <span className="text-[8px] font-bold uppercase opacity-60">Income</span>
+              <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Diamond Income</span>
             </Button>
 
             {!profile?.is_verified && !profile?.is_admin && (
