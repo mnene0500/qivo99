@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 /**
  * @fileOverview Native Economy Actions.
  * These run on Vercel to ensure fast, real-time social interactions.
+ * Every action now strictly logs to history tables.
  */
 
 export async function dailyCheckInAction(uid: string) {
@@ -118,6 +119,88 @@ export async function awardCoinsAction(callerUid: string, targetMatchFlowId: str
   }
 }
 
+export async function convertDiamondsToCoinsAction(uid: string, diamonds: number, coins: number) {
+  try {
+    const ts = Date.now();
+    // 1. Deduct Diamonds
+    await supabase.rpc("increment_diamonds", { user_id: uid, amount: -diamonds });
+    await supabase.from("diamond_history").insert({
+      user_id: uid,
+      amount: -diamonds,
+      type: "conversion",
+      description: `Converted to ${coins} coins`,
+      timestamp: ts
+    });
+
+    // 2. Add Coins
+    await supabase.rpc("increment_coins", { user_uid: uid, amount: coins });
+    await supabase.from("coin_history").insert({
+      user_id: uid,
+      amount: coins,
+      type: "conversion",
+      description: `Diamond Conversion`,
+      timestamp: ts
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function requestWithdrawalAction(userUid: string, diamonds: number, amount_kes: number, agencyId: string) {
+  try {
+    const ts = Date.now();
+    // 1. Deduct Balance Immediately
+    await supabase.rpc("increment_diamonds", { user_id: userUid, amount: -diamonds });
+    
+    // 2. Log History
+    await supabase.from('diamond_history').insert({
+      user_id: userUid,
+      amount: -diamonds,
+      type: 'withdrawal',
+      description: `Payout Request KES ${amount_kes}`,
+      timestamp: ts
+    });
+
+    // 3. Create Record
+    const { error } = await supabase.from('withdrawals').insert({
+      user_id: userUid,
+      agency_id: agencyId,
+      diamonds,
+      amount_kes,
+      status: 'pending',
+      timestamp: ts
+    });
+    if (error) throw error;
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function sendMysteryNoteAction(senderUid: string, message: string, recipientCount: number) {
+  try {
+    const cost = recipientCount * 10;
+    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', senderUid).single();
+    if ((bal?.coins || 0) < cost) throw new Error("Insufficient coins");
+
+    await supabase.rpc("increment_coins", { user_uid: senderUid, amount: -cost });
+    await supabase.from('coin_history').insert({
+      user_id: senderUid,
+      amount: -cost,
+      type: 'mystery_note',
+      description: `Sent Mystery Note to ${recipientCount} people`,
+      timestamp: Date.now()
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function submitReportAction(reporterUid: string, reportedUid: string, reason: string, description: string, proofUrl: string) {
   try {
     const { error } = await supabase.from('reports').insert({
@@ -179,27 +262,6 @@ export async function toggleUserRoleAction(callerUid: string, targetMatchFlowId:
   }
 }
 
-export async function sendMysteryNoteAction(senderUid: string, message: string, recipientCount: number) {
-  try {
-    const cost = recipientCount * 10;
-    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', senderUid).single();
-    if ((bal?.coins || 0) < cost) throw new Error("Insufficient coins");
-
-    await supabase.rpc("increment_coins", { user_uid: senderUid, amount: -cost });
-    await supabase.from('coin_history').insert({
-      user_id: senderUid,
-      amount: -cost,
-      type: 'mystery_note',
-      description: `Sent Mystery Note to ${recipientCount} people`,
-      timestamp: Date.now()
-    });
-
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
 export async function joinAgencyAction(userUid: string, agencyCode: string) {
   try {
     const { error } = await supabase.from('users').update({ agency_id: agencyCode, agency_status: 'pending' }).eq('uid', userUid);
@@ -213,23 +275,6 @@ export async function joinAgencyAction(userUid: string, agencyCode: string) {
 export async function reviewRecruitmentAction(agentUid: string, applicantUid: string, status: 'approved' | 'rejected') {
   try {
     const { error } = await supabase.from('users').update({ agency_status: status }).eq('uid', applicantUid);
-    if (error) throw error;
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
-export async function requestWithdrawalAction(userUid: string, diamonds: number, amount_kes: number, agencyId: string) {
-  try {
-    const { error } = await supabase.from('withdrawals').insert({
-      user_id: userUid,
-      agency_id: agencyId,
-      diamonds,
-      amount_kes,
-      status: 'pending',
-      timestamp: Date.now()
-    });
     if (error) throw error;
     return { success: true };
   } catch (error: any) {

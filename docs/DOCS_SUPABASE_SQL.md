@@ -1,7 +1,7 @@
 
 # QIVO Production SQL (Run in SQL Editor)
 
-This script sets up all tables and the **CONSOLIDATED** storage RLS policies for the single 'photos' bucket.
+This script sets up all tables and ensures history triggers and balance helpers are ready.
 
 ```sql
 -- 1. SETUP ATOMIC HELPERS
@@ -26,28 +26,69 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 2. CREATE CORE TABLES
--- [Run table creation from earlier docs if starting from scratch]
+CREATE TABLE IF NOT EXISTS public.users (
+  uid UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT UNIQUE,
+  name TEXT,
+  gender TEXT,
+  dob DATE,
+  country TEXT,
+  looking_for TEXT,
+  interests TEXT,
+  education_level TEXT,
+  photo_url TEXT,
+  additional_photos TEXT[] DEFAULT '{}',
+  match_flow_id TEXT UNIQUE,
+  onboarding_complete BOOLEAN DEFAULT FALSE,
+  is_admin BOOLEAN DEFAULT FALSE,
+  is_coin_seller BOOLEAN DEFAULT FALSE,
+  is_agent BOOLEAN DEFAULT FALSE,
+  is_verified BOOLEAN DEFAULT FALSE,
+  is_deleted BOOLEAN DEFAULT FALSE,
+  agency_id TEXT,
+  agency_status TEXT, 
+  check_in_streak INTEGER DEFAULT 0,
+  last_check_in_date TIMESTAMPTZ,
+  blocking UUID[] DEFAULT '{}',
+  blocked_by UUID[] DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.balances (
+  user_id UUID PRIMARY KEY REFERENCES public.users(uid) ON DELETE CASCADE,
+  coins BIGINT DEFAULT 0,
+  diamonds NUMERIC DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.coin_history (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  amount BIGINT,
+  type TEXT, 
+  description TEXT,
+  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+);
+
+CREATE TABLE IF NOT EXISTS public.diamond_history (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  amount NUMERIC,
+  type TEXT,
+  description TEXT,
+  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+);
 
 -- 3. ENABLE RLS FOR 'photos' STORAGE BUCKET
 -- Public read access for all photos
 CREATE POLICY "Public Read Photos" ON storage.objects FOR SELECT USING (bucket_id = 'photos');
 
--- Avatars: Only owner can upload/update their own avatar
-CREATE POLICY "Users can manage own avatar" ON storage.objects FOR ALL USING (
-  bucket_id = 'photos' AND (storage.foldername(name))[1] = 'avatars' AND (storage.foldername(name))[2] = (auth.uid()::text || '.jpg')
+-- Standard path: userId/timestamp.jpg
+CREATE POLICY "Users can manage own photos" ON storage.objects FOR ALL USING (
+  bucket_id = 'photos' AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- Posts: Only owner can manage photos in their own posts folder
-CREATE POLICY "Users can manage own posts" ON storage.objects FOR ALL USING (
-  bucket_id = 'photos' AND (storage.foldername(name))[1] = 'posts' AND (storage.foldername(name))[2] = auth.uid()::text
-);
-
--- 4. REPORT SYSTEM RLS
-ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can create reports" ON public.reports FOR INSERT WITH CHECK (auth.uid() = reporter_id);
-CREATE POLICY "Admins can view all reports" ON public.reports FOR SELECT USING (EXISTS (SELECT 1 FROM public.users WHERE uid = auth.uid() AND is_admin = true));
-CREATE POLICY "Admins can update reports" ON public.reports FOR UPDATE USING (EXISTS (SELECT 1 FROM public.users WHERE uid = auth.uid() AND is_admin = true));
-
--- 5. RE-ENABLE REALTIME
-ALTER PUBLICATION supabase_realtime ADD TABLE public.balances, public.coin_history, public.diamond_history, public.chats, public.messages, public.users, public.reports;
+-- 4. ENABLE REALTIME
+ALTER PUBLICATION supabase_realtime ADD TABLE public.balances, public.coin_history, public.diamond_history, public.users, public.reports;
 ```

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Gem, ArrowUp, ArrowDown, Loader2, History } from "lucide-react"
+import { ChevronLeft, Gem, ArrowUpRight, ArrowDownRight, Loader2, History } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 
@@ -24,37 +24,92 @@ export default function DiamondHistoryPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const fetchHistory = async () => {
     if (!user?.id) return
-    const fetchHistory = async () => {
-      const { data } = await supabase.from('diamond_history').select('*').eq('user_id', user.id).order('timestamp', { ascending: false }).limit(50)
-      if (data) setTransactions(data)
-      setLoading(false)
-    }
+    const { data } = await supabase
+      .from('diamond_history')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('timestamp', { ascending: false })
+      .limit(100)
+    
+    if (data) setTransactions(data)
+    setLoading(false)
+  }
+
+  useEffect(() => {
     fetchHistory()
-    const channel = supabase.channel(`diamonds:${user.id}`).on('postgres_changes', { event: '*', table: 'diamond_history', filter: `user_id=eq.${user.id}` }, () => fetchHistory()).subscribe()
+
+    if (!user?.id) return
+
+    // REALTIME: Synchronize all diamond ledger events
+    const channel = supabase.channel(`diamond-history-live:${user.id}`)
+      .on('postgres_changes', { event: '*', table: 'diamond_history', filter: `user_id=eq.${user.id}` }, () => fetchHistory())
+      .subscribe()
+    
     return () => { supabase.removeChannel(channel) }
   }, [user?.id])
 
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
       <header className="px-4 h-16 flex items-center justify-between border-b sticky top-0 bg-white z-50">
-        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
-        <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-black">Diamond Statement</h1>
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
+          <ChevronLeft className="w-6 h-6 text-black" />
+        </Button>
+        <h1 className="text-sm font-black text-black uppercase tracking-widest">Diamond History</h1>
         <div className="w-10" />
       </header>
+
       <main className="flex-1 overflow-y-auto no-scrollbar">
-        {loading ? (<div className="flex flex-col items-center justify-center py-20 gap-4"><Loader2 className="w-8 h-8 animate-spin text-[#00A2FF]" /></div>) : transactions.length === 0 ? (<div className="flex flex-col items-center justify-center py-32 px-12 text-center space-y-6"><div className="w-20 h-20 bg-blue-50 rounded-[2.5rem] flex items-center justify-center"><History className="w-10 h-10 text-blue-200" /></div><p className="font-black text-sm uppercase tracking-widest text-black">No History Yet</p></div>) : (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-20">
+            <Loader2 className="w-8 h-8 animate-spin text-[#00A2FF]" />
+            <p className="text-[10px] font-bold uppercase tracking-widest mt-4">Syncing Ledger...</p>
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-32 opacity-40 px-12 text-center space-y-4">
+            <div className="w-20 h-20 bg-blue-50 rounded-[2.5rem] flex items-center justify-center">
+              <Gem className="w-10 h-10 text-blue-200" />
+            </div>
+            <div className="space-y-1">
+              <p className="font-black text-sm uppercase tracking-widest text-black">Empty Vault</p>
+              <p className="text-[10px] font-bold text-gray-400">Your diamond earnings will appear here.</p>
+            </div>
+          </div>
+        ) : (
           <div className="divide-y divide-gray-50">
-            {transactions.map((tx) => (
-              <div key={tx.id} className="flex items-center justify-between p-6 hover:bg-gray-50/30 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", tx.amount > 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600")}>{tx.amount > 0 ? <ArrowUp className="w-6 h-6" /> : <ArrowDown className="w-6 h-6" />}</div>
-                  <div className="flex flex-col"><span className="font-bold text-[13px] text-black tracking-tight">{tx.description}</span><span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">{format(tx.timestamp, "MMM d, HH:mm")}</span></div>
+            {transactions.map((tx) => {
+              const isCredit = tx.amount > 0
+              return (
+                <div key={tx.id} className="flex items-center justify-between p-6 hover:bg-gray-50/50 transition-colors animate-in fade-in">
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm", 
+                      isCredit ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600"
+                    )}>
+                      {isCredit ? <ArrowUpRight className="w-6 h-6" /> : <ArrowDownRight className="w-6 h-6" />}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-bold text-[13px] text-black tracking-tight truncate">{tx.description}</span>
+                      <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">
+                        {format(tx.timestamp, "MMM d, HH:mm")} • {tx.type}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn(
+                        "text-lg font-black tracking-tighter", 
+                        isCredit ? "text-blue-600" : "text-purple-600"
+                      )}>
+                        {isCredit ? '+' : ''}{tx.amount.toFixed(0)}
+                      </span>
+                      <Gem className={cn("w-3.5 h-3.5 fill-current", isCredit ? "text-blue-600" : "text-purple-600")} />
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right"><div className="flex items-center gap-1"><span className={cn("text-lg font-black", tx.amount > 0 ? "text-green-600" : "text-red-600")}>{tx.amount > 0 ? '+' : ''}{tx.amount}</span><Gem className="w-3 h-3 fill-current" /></div></div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </main>

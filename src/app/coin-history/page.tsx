@@ -56,15 +56,15 @@ export default function CoinHistoryPage() {
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
           <ChevronLeft className="w-6 h-6 text-black" />
         </Button>
-        <h1 className="text-sm font-black text-black uppercase tracking-widest">Wallet History</h1>
+        <h1 className="text-sm font-black text-black uppercase tracking-widest">Coin History</h1>
         <div className="w-10" />
       </header>
 
       <main className="flex-1 overflow-y-auto no-scrollbar">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-20">
-            <Loader2 className="w-8 h-8 animate-spin" />
-            <p className="text-[10px] font-bold uppercase tracking-widest">Fetching Ledger...</p>
+            <Loader2 className="w-8 h-8 animate-spin text-[#00A2FF]" />
+            <p className="text-[10px] font-bold uppercase tracking-widest mt-4">Syncing Ledger...</p>
           </div>
         ) : transactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 opacity-40 px-12 text-center space-y-4">
@@ -89,14 +89,14 @@ export default function CoinHistoryPage() {
                     )}>
                       {isCredit ? <ArrowUpRight className="w-6 h-6" /> : <ArrowDownRight className="w-6 h-6" />}
                     </div>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-[13px] text-black tracking-tight">{tx.description}</span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-bold text-[13px] text-black tracking-tight truncate">{tx.description}</span>
                       <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">
                         {format(tx.timestamp, "MMM d, HH:mm")} • {tx.type}
                       </span>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <div className="flex items-center gap-1.5">
                       <span className={cn(
                         "text-lg font-black tracking-tighter", 
@@ -104,9 +104,7 @@ export default function CoinHistoryPage() {
                       )}>
                         {isCredit ? '+' : ''}{tx.amount}
                       </span>
-                      <div className={cn("w-4 h-4 rounded-full flex items-center justify-center", isCredit ? "bg-green-100" : "bg-red-100")}>
-                        <Coins className={cn("w-2.5 h-2.5", isCredit ? "text-green-600" : "text-red-600")} />
-                      </div>
+                      <Coins className={cn("w-3.5 h-3.5", isCredit ? "text-green-600" : "text-red-600")} />
                     </div>
                   </div>
                 </div>
@@ -115,12 +113,6 @@ export default function CoinHistoryPage() {
           </div>
         )}
       </main>
-      
-      <footer className="p-8 text-center bg-gray-50/30">
-        <p className="text-[9px] font-bold text-gray-300 uppercase tracking-[0.3em] leading-relaxed">
-          Ledger synchronized with global QIVO economy.
-        </p>
-      </footer>
     </div>
   )
 }

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ChevronLeft, Gem, History, Coins, ArrowRightLeft, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { convertDiamondsToCoinsAction } from "@/app/actions/matchflow-actions"
 
 export default function IncomePage() {
   const router = useRouter()
@@ -24,14 +25,14 @@ export default function IncomePage() {
   useEffect(() => {
     if (!user?.id) return
     const fetchBalances = async () => {
-      const { data } = await supabase.from('balances').select('*').eq('user_id', user.id).single()
+      const { data } = await supabase.from('balances').select('*').eq('user_id', user.id).maybeSingle()
       if (data) setBalances({ coins: data.coins || 0, diamonds: Number(data.diamonds) || 0 })
       setBalanceLoading(false)
     }
     fetchBalances()
 
     const channel = supabase.channel(`income-sync:${user.id}`).on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
-      setBalances({ coins: payload.new.coins, diamonds: Number(payload.new.diamonds) })
+      setBalances({ coins: payload.new.coins || 0, diamonds: Number(payload.new.diamonds) || 0 })
     }).subscribe()
       
     return () => { supabase.removeChannel(channel) }
@@ -51,22 +52,16 @@ export default function IncomePage() {
 
     setIsProcessing(true)
     try {
-      const ts = Date.now()
-      const newDiamonds = diamondBalance - amount
-      const newCoins = balances.coins + expectedCoins
-
-      // 1. Update Balance
-      const { error } = await supabase.from('balances').update({ diamonds: newDiamonds, coins: newCoins }).eq('user_id', user?.id)
-      if (error) throw error
-
-      // 2. Track History
-      await supabase.from('diamond_history').insert({ user_id: user?.id, amount: -amount, type: 'conversion', description: `Converted to ${expectedCoins} coins`, timestamp: ts })
-      await supabase.from('coin_history').insert({ user_id: user?.id, amount: expectedCoins, type: 'conversion', description: `Income Conversion`, timestamp: ts })
+      const res = await convertDiamondsToCoinsAction(user!.id, amount, expectedCoins)
       
-      toast({ title: "Success!", description: `Added ${expectedCoins} coins.` })
-      setDiamondsToConvert("")
+      if (res.success) {
+        toast({ title: "Conversion Successful!", description: `Added ${expectedCoins} coins to wallet.` })
+        setDiamondsToConvert("")
+      } else {
+        toast({ variant: "destructive", title: "Error", description: res.error })
+      }
     } catch (err) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to update ledger." })
+      toast({ variant: "destructive", title: "System Error" })
     } finally {
       setIsProcessing(false)
     }
@@ -92,13 +87,13 @@ export default function IncomePage() {
           <div className="space-y-2">
             <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Convert to Coins (Min {minDiamonds})</Label>
             <div className="relative">
-              <Input type="number" value={diamondsToConvert} onChange={(e) => setDiamondsToConvert(e.target.value)} className="rounded-2xl h-16 pl-12 border-gray-100 bg-gray-50 text-lg font-bold" />
+              <Input type="number" placeholder={minDiamonds.toString()} value={diamondsToConvert} onChange={(e) => setDiamondsToConvert(e.target.value)} className="rounded-2xl h-16 pl-12 border-gray-100 bg-gray-50 text-lg font-bold" />
               <Gem className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
             </div>
           </div>
 
           {Number(diamondsToConvert) >= minDiamonds && (
-            <div className="p-5 rounded-2xl border bg-blue-50 border-blue-100 flex items-center justify-between">
+            <div className="p-5 rounded-2xl border bg-blue-50 border-blue-100 flex items-center justify-between animate-in zoom-in-95">
               <div className="flex items-center gap-3"><Coins className="w-5 h-5 text-yellow-500" /><span className="text-[10px] font-bold text-black uppercase tracking-widest">Receiving</span></div>
               <span className="text-xl font-bold text-blue-600">+{expectedCoins} Coins</span>
             </div>
