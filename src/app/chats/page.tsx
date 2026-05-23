@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, Suspense, useCallback, useRef } from "react"
@@ -7,35 +6,16 @@ import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Loader2, User, Trash2, MoreVertical, AlertCircle, Gift, Phone, Video, Ban, X } from "lucide-react"
+import { Send, ChevronLeft, Loader2, User, Phone, Video, Ban, Lock, ShieldAlert } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
-import { sendGiftAction } from "@/app/actions/matchflow-actions"
-import { checkCallBalanceAction } from "@/app/actions/call-actions"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 
 interface Message {
   id: string | number
   text: string
   sender_id: string
   timestamp: number
-  is_gift?: boolean
   is_optimistic?: boolean
 }
 
@@ -47,16 +27,8 @@ interface ChatSummary {
   last_message: string
   last_message_at: number
   unread_count: number
-  cleared_at?: Record<string, number>
   last_seen_at?: Record<string, number>
 }
-
-const GIFTS = [
-  { id: 'rose', name: 'Rose', price: 200, icon: '🌹' },
-  { id: 'heart', name: 'Heart', price: 500, icon: '❤️' },
-  { id: 'diamond', name: 'Diamond', price: 2000, icon: '💎' },
-  { id: 'ring', name: 'Ring', price: 5000, icon: '💍' },
-]
 
 function ChatsContent() {
   const searchParams = useSearchParams()
@@ -73,7 +45,6 @@ function ChatsContent() {
   const [partnerProfile, setPartnerProfile] = useState<any>(null)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [userBalance, setUserBalance] = useState<number>(0)
-  const [isSending, setIsSending] = useState(false)
   const [activeChatClearedAt, setActiveChatClearedAt] = useState<number>(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -95,13 +66,6 @@ function ChatsContent() {
     if (!currentUser?.id) return
     supabase.from('users').select('*').eq('uid', currentUser.id).maybeSingle().then(({ data }) => setUserProfile(data))
     supabase.from('balances').select('coins').eq('user_id', currentUser.id).maybeSingle().then(({ data }) => setUserBalance(Number(data?.coins) || 0))
-    
-    const balChan = supabase.channel(`my-bal-${currentUser.id}`)
-      .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
-        setUserBalance(Number(payload.new.coins) || 0)
-      }).subscribe()
-
-    return () => { supabase.removeChannel(balChan) }
   }, [currentUser?.id])
 
   const fetchSummaries = useCallback(async () => {
@@ -154,13 +118,13 @@ function ChatsContent() {
       if (data) setMessages(data)
     }
     fetchMessages()
+    
     const channel = supabase.channel(`messages:${chatId}`).on('postgres_changes', { event: 'INSERT', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
       const newMsg = payload.new as Message
       if (newMsg.timestamp <= activeChatClearedAt) return
       setMessages(prev => {
-        if (prev.some(m => m.text === newMsg.text && Math.abs(m.timestamp - newMsg.timestamp) < 2000)) {
-          return prev.map(m => (m.text === newMsg.text && m.is_optimistic) ? newMsg : m)
-        }
+        const exists = prev.some(m => m.text === newMsg.text && Math.abs(m.timestamp - newMsg.timestamp) < 5000)
+        if (exists) return prev.map(m => (m.text === newMsg.text && m.is_optimistic) ? newMsg : m)
         return [newMsg, ...prev]
       })
       markAsSeen(chatId)
@@ -191,12 +155,18 @@ function ChatsContent() {
     if (!currentUser || !startWithId || !partnerProfile || !chatId) return
     const cost = type === 'video' ? 150 : 70
     if (userProfile?.gender === 'male' && userBalance < cost && !userProfile.is_admin) {
-      toast({ variant: "destructive", title: "Insufficient Balance" })
+      toast({ variant: "destructive", title: "Insufficient Coins" })
       router.push("/recharge")
       return
     }
     router.push(`/call/${chatId}?type=${type}&partner=${encodeURIComponent(partnerProfile.name)}&partnerId=${startWithId}&caller=true`)
   }
+
+  // CHECK BLOCK STATUS
+  const isBlocked = userProfile && partnerProfile && (
+    (userProfile.blocking || []).includes(partnerProfile.uid) || 
+    (userProfile.blocked_by || []).includes(partnerProfile.uid)
+  );
 
   if (authLoading || !isInitialized) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
 
@@ -236,13 +206,21 @@ function ChatsContent() {
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <div className="flex items-center gap-3 flex-1">
           <Avatar className="w-10 h-10 border"><AvatarImage src={partnerProfile?.photo_url} className="object-cover" /><AvatarFallback>{partnerProfile?.name?.[0]}</AvatarFallback></Avatar>
-          <div><p className="font-black text-sm leading-none">{partnerProfile?.name || '...'}</p><p className="text-[9px] font-bold text-green-500 uppercase tracking-widest mt-1">Available</p></div>
+          <div>
+            <p className="font-black text-sm leading-none">{partnerProfile?.name || '...'}</p>
+            <p className="text-[9px] font-bold text-green-500 uppercase tracking-widest mt-1">
+              {isBlocked ? "Unavailable" : "Available"}
+            </p>
+          </div>
         </div>
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon" onClick={() => handleCall('voice')} className="rounded-full"><Phone className="w-5 h-5" /></Button>
-          <Button variant="ghost" size="icon" onClick={() => handleCall('video')} className="rounded-full"><Video className="w-5 h-5" /></Button>
-        </div>
+        {!isBlocked && (
+          <div className="flex gap-1">
+            <Button variant="ghost" size="icon" onClick={() => handleCall('voice')} className="rounded-full"><Phone className="w-5 h-5" /></Button>
+            <Button variant="ghost" size="icon" onClick={() => handleCall('video')} className="rounded-full"><Video className="w-5 h-5" /></Button>
+          </div>
+        )}
       </header>
+
       <main className="flex-1 overflow-y-auto p-6 flex flex-col-reverse gap-4 bg-gray-50 no-scrollbar">
         {messages.map(m => (
           <div key={m.id} className={cn("max-w-[80%] p-4 rounded-[2rem] text-sm font-medium shadow-sm animate-in zoom-in-95", m.sender_id === currentUser?.id ? "bg-[#00A2FF] text-white self-end rounded-br-none" : "bg-white text-black self-start rounded-bl-none border")}>
@@ -250,9 +228,27 @@ function ChatsContent() {
           </div>
         ))}
       </main>
-      <footer className="p-4 border-t bg-white flex gap-2">
-        <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} className="flex-1 h-12 bg-gray-50 rounded-2xl px-5 text-sm font-bold outline-none" placeholder="Message..." />
-        <Button onClick={handleSendMessage} size="icon" className="rounded-full h-12 w-12 bg-[#00A2FF]"><Send className="w-5 h-5" /></Button>
+
+      <footer className="relative p-4 border-t bg-white">
+        {isBlocked ? (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-50 flex items-center justify-center p-4">
+             <div className="flex items-center gap-3 bg-red-50 text-red-600 px-6 py-3 rounded-2xl border border-red-100 shadow-sm animate-in slide-in-from-bottom-2">
+                <ShieldAlert className="w-5 h-5" />
+                <span className="text-xs font-black uppercase tracking-widest">Communication Blocked</span>
+             </div>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <input 
+              value={newMessage} 
+              onChange={e => setNewMessage(e.target.value)} 
+              onKeyDown={e => e.key === 'Enter' && handleSendMessage()} 
+              className="flex-1 h-12 bg-gray-50 rounded-2xl px-5 text-sm font-bold outline-none border border-transparent focus:border-[#00A2FF]/20 transition-all" 
+              placeholder="Type something..." 
+            />
+            <Button onClick={handleSendMessage} size="icon" className="rounded-full h-12 w-12 bg-[#00A2FF] shadow-lg shadow-blue-100"><Send className="w-5 h-5" /></Button>
+          </div>
+        )}
       </footer>
     </div>
   )

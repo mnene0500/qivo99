@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useRef, use, useState } from "react"
@@ -31,7 +30,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   
   const [micEnabled, setMicEnabled] = useState(true)
   const [cameraEnabled, setCameraEnabled] = useState(isVideo)
-  const [isReady, setIsReady] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [configError, setConfigError] = useState<string | null>(null)
 
@@ -44,12 +42,19 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
   const logCallInChat = async (status: string) => {
     if (!chatId || !user) return
-    const text = status // e.g. [Cancelled], [Rejected], [04:22]
-    await supabase.from('messages').insert({ chat_id: chatId, text, sender_id: user.id, timestamp: Date.now() })
-    await supabase.from('chats').update({ last_message: text, last_message_at: Date.now() }).eq('id', chatId)
+    await supabase.from('messages').insert({ 
+      chat_id: chatId, 
+      text: status, 
+      sender_id: user.id, 
+      timestamp: Date.now() 
+    })
+    await supabase.from('chats').update({ 
+      last_message: status, 
+      last_message_at: Date.now() 
+    }).eq('id', chatId)
   }
 
-  const hangUp = (logStatus?: string) => {
+  const hangUp = () => {
     stopRingtone()
     if (billingIntervalRef.current) clearInterval(billingIntervalRef.current)
     if (zpRef.current) try { zpRef.current.leaveRoom() } catch (e) {}
@@ -67,39 +72,63 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     router.replace("/chats")
   }
 
+  // 1. Signaling & Ringtone Setup
   useEffect(() => {
     if (!user || !partnerId) return
     
-    // START RINGTONE
     ringtoneRef.current = new Audio('/notification.mp3')
     ringtoneRef.current.loop = true
-    if (isCaller) ringtoneRef.current.play().catch(() => {})
-
+    
     if (isCaller) {
+      ringtoneRef.current.play().catch(() => {})
       supabase.channel(`calls:${partnerId}`).send({
         type: 'broadcast',
         event: 'incoming-call',
-        payload: { chatId, type: isVideo ? 'video' : 'voice', callerId: user.id, callerName: user.user_metadata?.full_name || user.email?.split('@')[0] || "User", callerPhoto: user.user_metadata?.avatar_url }
+        payload: { 
+          chatId, 
+          type: isVideo ? 'video' : 'voice', 
+          callerId: user.id, 
+          callerName: user.user_metadata?.full_name || user.email?.split('@')[0] || "User", 
+          callerPhoto: user.user_metadata?.avatar_url 
+        }
       })
     }
 
     const channel = supabase.channel(`calls:${user.id}`)
-      .on('broadcast', { event: 'call-rejected' }, () => { toast({ title: "Rejected" }); hangUp(); })
-      .on('broadcast', { event: 'cancel-call' }, () => { toast({ title: "Caller Cancelled" }); hangUp(); })
+      .on('broadcast', { event: 'call-rejected' }, () => { 
+        toast({ title: "Call Rejected" })
+        hangUp()
+      })
+      .on('broadcast', { event: 'cancel-call' }, () => { 
+        toast({ title: "Caller Cancelled" })
+        hangUp()
+      })
       .subscribe()
 
-    return () => { supabase.removeChannel(channel); stopRingtone(); }
+    return () => { 
+      supabase.removeChannel(channel)
+      stopRingtone() 
+    }
   }, [user, partnerId])
 
+  // 2. ZegoCloud Engine Initialization
   useEffect(() => {
     if (!user || !containerRef.current) return
+    
     const init = async () => {
       try {
         const config = await getZegoConfigAction()
         if (!config.success) throw new Error("Service Unavailable")
         
         const { ZegoUIKitPrebuilt } = await import('@zegocloud/zego-uikit-prebuilt')
-        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(config.appId, config.serverSecret, chatId, user.id, user.user_metadata?.full_name || "User")
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+          config.appId, 
+          config.serverSecret, 
+          chatId, 
+          user.id, 
+          user.user_metadata?.full_name || "User"
+        )
+        
         const zp = ZegoUIKitPrebuilt.create(kitToken)
         zpRef.current = zp
         
@@ -113,27 +142,34 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
             setIsConnected(true)
             stopRingtone()
             callStartTimeRef.current = Date.now()
+            // BILLING ONLY FOR CALLER
             if (isCaller) startBilling()
           },
           onLeaveRoom: () => hangUp(),
         })
-        setIsReady(true)
-      } catch (err) { setConfigError("Failed to connect.") }
+      } catch (err) { 
+        setConfigError("Failed to connect to secure line.") 
+      }
     }
     init()
   }, [user, chatId])
 
   const startBilling = () => {
     if (!isCaller) return
-    // Billing Logic: First 10s free in Min 1. 
+    
+    // First 10 seconds of 1st minute are free
     setTimeout(async () => {
       if (zpRef.current) {
         const check = await checkCallBalanceAction(user!.id, isVideo ? 'video' : 'voice')
-        if (!check.success) return hangUp()
+        if (!check.success) {
+          toast({ variant: "destructive", title: "Balance Exhausted" })
+          return hangUp()
+        }
         deductCallCoinsAction(user!.id, isVideo ? 'video' : 'voice', partnerId, partnerName)
       }
     }, 11000)
 
+    // Billed at start of every subsequent minute
     billingIntervalRef.current = setInterval(async () => {
       const check = await checkCallBalanceAction(user!.id, isVideo ? 'video' : 'voice')
       if (!check.success) return hangUp()
@@ -141,35 +177,58 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     }, 60000)
   }
 
-  if (configError) return <div className="h-screen bg-black flex flex-col items-center justify-center text-white"><AlertCircle className="w-12 h-12 text-red-500 mb-4" />{configError}<Button onClick={() => router.back()} className="mt-4">Back</Button></div>
+  if (configError) return (
+    <div className="h-screen bg-black flex flex-col items-center justify-center text-white p-8 text-center space-y-6">
+      <AlertCircle className="w-16 h-16 text-red-500 animate-pulse" />
+      <h2 className="text-xl font-black uppercase tracking-widest">{configError}</h2>
+      <Button onClick={() => router.back()} className="rounded-full h-14 px-10 bg-white text-black font-bold">Return Home</Button>
+    </div>
+  )
 
   return (
     <div className="w-full h-screen bg-black relative flex flex-col items-center justify-center overflow-hidden">
       {!isConnected && (
-        <div className="absolute inset-0 z-40 bg-black/60 backdrop-blur-xl flex flex-col items-center justify-center animate-in fade-in">
+        <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-2xl flex flex-col items-center justify-center animate-in fade-in duration-700">
           <div className="relative mb-8">
              <div className="w-32 h-32 border-4 border-[#00A2FF]/20 rounded-full animate-pulse" />
              <div className="absolute inset-0 border-4 border-[#00A2FF] border-t-transparent rounded-full animate-spin" />
           </div>
-          <h2 className="text-2xl font-black uppercase tracking-widest text-white">{isCaller ? 'Calling...' : 'Connecting...'}</h2>
-          <p className="text-xs font-bold text-gray-400 mt-2 uppercase tracking-[0.3em]">{partnerName}</p>
+          <h2 className="text-2xl font-black uppercase tracking-widest text-white italic">
+            {isCaller ? 'Calling...' : 'Secure Connection...'}
+          </h2>
+          <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-[0.4em]">{partnerName}</p>
         </div>
       )}
       
       <div ref={containerRef} className="w-full h-full" />
       
-      {isReady && (
+      {isConnected && (
         <div className="absolute bottom-12 inset-x-0 flex justify-center items-center gap-8 z-50 px-10">
-          <button onClick={() => { setMicEnabled(!micEnabled); zpRef.current?.enableMicrophone(!micEnabled); }} className={cn("w-16 h-16 rounded-full backdrop-blur-xl border border-white/20 flex items-center justify-center", micEnabled ? "bg-white/10 text-white" : "bg-red-500 text-white")}>
+          <button 
+            onClick={() => { setMicEnabled(!micEnabled); zpRef.current?.enableMicrophone(!micEnabled); }} 
+            className={cn(
+              "w-16 h-16 rounded-full backdrop-blur-xl border border-white/20 flex items-center justify-center transition-all shadow-xl", 
+              micEnabled ? "bg-white/10 text-white" : "bg-red-500 text-white"
+            )}
+          >
             {micEnabled ? <Mic /> : <MicOff />}
           </button>
           
-          <button onClick={() => hangUp()} className="w-20 h-20 rounded-full bg-red-600 flex items-center justify-center shadow-2xl active:scale-90 transition-transform">
+          <button 
+            onClick={() => hangUp()} 
+            className="w-20 h-20 rounded-full bg-red-600 flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
+          >
             <PhoneOff className="text-white w-8 h-8" />
           </button>
           
           {isVideo && (
-            <button onClick={() => { setCameraEnabled(!cameraEnabled); zpRef.current?.enableCamera(!cameraEnabled); }} className={cn("w-16 h-16 rounded-full backdrop-blur-xl border border-white/20 flex items-center justify-center", cameraEnabled ? "bg-white/10 text-white" : "bg-red-500 text-white")}>
+            <button 
+              onClick={() => { setCameraEnabled(!cameraEnabled); zpRef.current?.enableCamera(!cameraEnabled); }} 
+              className={cn(
+                "w-16 h-16 rounded-full backdrop-blur-xl border border-white/20 flex items-center justify-center transition-all shadow-xl", 
+                cameraEnabled ? "bg-white/10 text-white" : "bg-red-500 text-white"
+              )}
+            >
               {cameraEnabled ? <Video /> : <VideoOff />}
             </button>
           )}
