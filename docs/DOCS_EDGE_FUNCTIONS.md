@@ -1,5 +1,6 @@
 
 
+
 # QIVO Production Edge Function
 
 Only the `payment-ops` function is required as an Edge Function for PesaPal. Update your Supabase function with this hardened logic.
@@ -115,3 +116,4 @@ serve(async (req) => {
   }
 })
 ```
+
