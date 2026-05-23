@@ -161,8 +161,9 @@ export default function EditProfilePage() {
         }
       }
 
-      // 3. PERSIST ALL DETAILS
+      // 3. PERSIST ALL DETAILS USING UPSERT FOR RESILIENCE
       const updateData = {
+        uid: user.id,
         name: formData.name,
         interests: formData.interests,
         dob: formData.dob || null,
@@ -174,18 +175,18 @@ export default function EditProfilePage() {
         updated_at: new Date().toISOString()
       };
 
+      // Atomic Upsert ensures that if row exists it updates, if not it creates
       const { error: dbError } = await supabase
         .from('users')
-        .update(updateData)
-        .eq('uid', user.id);
+        .upsert(updateData, { onConflict: 'uid' });
       
       if (dbError) throw dbError;
 
       toast({ title: "Profile Saved", description: "Your details have been updated." })
       
-      // Force refresh data across the app
+      // Force refresh across the app
       router.refresh();
-      setTimeout(() => router.push('/profile'), 500);
+      setTimeout(() => router.push('/profile'), 800);
     } catch (error: any) {
       console.error("[Profile Save Crash]", error);
       toast({ variant: "destructive", title: "Save Failed", description: error.message })
@@ -196,8 +197,7 @@ export default function EditProfilePage() {
 
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
 
-  // Visual Cache Buster
-  const avatarKey = `${formData.photo_url}?t=${Date.now()}`;
+  const avatarKey = formData.photo_url ? `${formData.photo_url}?t=${Date.now()}` : "";
 
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col pb-20 select-none">
@@ -210,7 +210,6 @@ export default function EditProfilePage() {
       </header>
 
       <main className="flex-1 p-6 space-y-8 overflow-y-auto no-scrollbar">
-        {/* AVATAR SECTION */}
         <div className="flex flex-col items-center">
           <div className="relative group cursor-pointer" onClick={() => { setTargetPhotoIndex('profile'); fileInputRef.current?.click(); }}>
             <Avatar className="w-32 h-32 border-4 border-gray-50 shadow-2xl overflow-hidden bg-gray-100">
@@ -222,7 +221,6 @@ export default function EditProfilePage() {
           <p className="mt-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Change Avatar</p>
         </div>
 
-        {/* GALLERY SECTION */}
         <div className="space-y-4">
           <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">My Visuals (Max 4)</Label>
           <div className="grid grid-cols-4 gap-3">
@@ -239,7 +237,6 @@ export default function EditProfilePage() {
           </div>
         </div>
 
-        {/* DETAILS SECTION */}
         <div className="space-y-6 pt-4">
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Display Name</Label>

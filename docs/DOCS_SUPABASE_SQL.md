@@ -157,11 +157,14 @@ DROP POLICY IF EXISTS "Users view own balance" ON public.balances;
 DROP POLICY IF EXISTS "Users update own balance" ON public.balances;
 DROP POLICY IF EXISTS "Participants view chats" ON public.chats;
 DROP POLICY IF EXISTS "Participants send messages" ON public.messages;
+DROP POLICY IF EXISTS "users_read_all" ON public.users;
+DROP POLICY IF EXISTS "users_insert_self" ON public.users;
+DROP POLICY IF EXISTS "users_update_self" ON public.users;
 
 -- RE-APPLY HARDENED POLICIES
-CREATE POLICY "Public profiles viewable" ON public.users FOR SELECT USING (true);
-CREATE POLICY "Users insert own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = uid);
-CREATE POLICY "Users update own profile" ON public.users FOR UPDATE USING (auth.uid() = uid) WITH CHECK (auth.uid() = uid);
+CREATE POLICY "users_read_all" ON public.users FOR SELECT USING (true);
+CREATE POLICY "users_insert_self" ON public.users FOR INSERT WITH CHECK (auth.uid() = uid);
+CREATE POLICY "users_update_self" ON public.users FOR UPDATE USING (auth.uid() = uid) WITH CHECK (auth.uid() = uid);
 
 CREATE POLICY "Users view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users update own balance" ON public.balances FOR UPDATE USING (auth.uid() = user_id);
@@ -172,17 +175,23 @@ CREATE POLICY "Participants view messages" ON public.messages FOR SELECT USING (
   SELECT 1 FROM public.chats WHERE id = messages.chat_id AND auth.uid() = ANY(participant_ids)
 ));
 
--- 4. ENABLE REALTIME (SAFE)
+-- 4. ENABLE REALTIME (IDEMPOTENT - FIXES ERROR 42710)
 DO $$ 
 BEGIN 
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
     CREATE PUBLICATION supabase_realtime;
   END IF;
   
-  -- Add tables individually with checks to prevent 42710
-  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'users') THEN 
+  -- Use pg_publication_tables to check if table is already registered
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND tablename = 'users' 
+    AND schemaname = 'public'
+  ) THEN 
     ALTER PUBLICATION supabase_realtime ADD TABLE public.users; 
   END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'balances') THEN 
     ALTER PUBLICATION supabase_realtime ADD TABLE public.balances; 
   END IF;
