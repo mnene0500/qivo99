@@ -48,6 +48,7 @@ export default function TaskCenterPage() {
     return () => { supabase.removeChannel(channel) }
   }, [user?.id])
 
+  // Robust "Today" check using local date strings
   const hasCheckedInToday = useMemo(() => {
     if (!profile?.last_check_in_date) return false
     const lastDate = new Date(profile.last_check_in_date).toDateString();
@@ -68,8 +69,8 @@ export default function TaskCenterPage() {
           title: "Check-in Successful!", 
           description: `You earned ${res.amount} coins. Streak updated!` 
         })
-        // Optimistic UI lock
-        setProfile({ ...profile, last_check_in_date: new Date().toISOString() })
+        // Optimistically lock the UI
+        setProfile((prev: any) => ({ ...prev, last_check_in_date: new Date().toISOString() }))
       } else {
         toast({ variant: "destructive", title: "Claim Error", description: res.error || "Please try again later." })
       }
@@ -114,9 +115,11 @@ export default function TaskCenterPage() {
             <div className="grid grid-cols-4 gap-3">
               {days.map((d, i) => {
                 const dayNumber = i + 1
+                // Logic to highlight days based on current cycle completion
                 const currentCycleDay = (currentStreak % 7) || (currentStreak > 0 ? 7 : 0);
                 
-                // Hard locking visual logic
+                // If they've already checked in today, dayNumber <= currentCycleDay is marked done.
+                // If they haven't checked in yet today, only days strictly less than currentCycleDay + 1 are done.
                 const isCollected = hasCheckedInToday 
                   ? dayNumber <= currentCycleDay
                   : dayNumber <= (currentStreak % 7);

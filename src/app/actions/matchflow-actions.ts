@@ -15,10 +15,14 @@ export async function dailyCheckInAction(uid: string) {
     if (userErr || !user) throw new Error("Profile not found.");
 
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const todayStr = now.toDateString();
     
-    if (user.last_check_in_date && user.last_check_in_date.split('T')[0] === today) {
-      return { success: false, error: "Already collected for today." };
+    // Check if last check-in was today in current server time
+    if (user.last_check_in_date) {
+      const lastCheckIn = new Date(user.last_check_in_date);
+      if (lastCheckIn.toDateString() === todayStr) {
+        return { success: false, error: "Already collected for today." };
+      }
     }
 
     let streak = 1;
@@ -27,7 +31,8 @@ export async function dailyCheckInAction(uid: string) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       
-      if (last.toISOString().split('T')[0] === yesterday.toISOString().split('T')[0]) {
+      // If last check-in was yesterday, increment streak. Otherwise reset to 1.
+      if (last.toDateString() === yesterday.toDateString()) {
         streak = (user.check_in_streak || 0) + 1;
       }
     }
@@ -83,11 +88,26 @@ export async function convertDiamondsToCoinsAction(user_id: string, diamonds: nu
 export async function sendMysteryNoteAction(user_id: string, message: string, recipientCount: number) {
   const supabase = getSupabaseAdmin();
   try {
-    const cost = recipientCount * 10;
+    const cost = Number(recipientCount) * 10;
     const ts = Date.now();
+    
+    // Server-side double check of balance
+    const { data: balance } = await supabase.from('balances').select('coins').eq('user_id', user_id).single();
+    if ((Number(balance?.coins) || 0) < cost) {
+      throw new Error("Insufficient coins for this operation.");
+    }
+
     const { error: deductErr } = await supabase.rpc("increment_coins", { user_id, amount: -cost });
-    if (deductErr) throw new Error("Insufficient coins.");
-    await supabase.from('coin_history').insert({ user_id, amount: -cost, type: 'mystery_note', description: `Note to ${recipientCount} people`, timestamp: ts });
+    if (deductErr) throw new Error("Payment deduction failed.");
+
+    await supabase.from('coin_history').insert({ 
+      user_id, 
+      amount: -cost, 
+      type: 'mystery_note', 
+      description: `Note to ${recipientCount} people`, 
+      timestamp: ts 
+    });
+    
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };

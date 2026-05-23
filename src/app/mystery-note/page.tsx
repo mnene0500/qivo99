@@ -22,7 +22,7 @@ export default function MysteryNotePage() {
   const [message, setMessage] = useState("")
   const [recipientCount, setRecipientCount] = useState(2)
   const [isSending, setIsSending] = useState(false)
-  const [userCoins, setUserCoins] = useState(0)
+  const [userCoins, setUserCoins] = useState<number | null>(null)
 
   useEffect(() => {
     if (!user?.id) return
@@ -48,11 +48,21 @@ export default function MysteryNotePage() {
   const handleSend = async () => {
     if (!user?.id || !message.trim()) return
     
-    const currentCoins = Number(userCoins);
+    // Ensure we have a valid numeric comparison
+    const currentCoins = Number(userCoins ?? 0);
     const requiredCoins = Number(totalCost);
 
+    if (userCoins === null) {
+      toast({ title: "Checking balance...", description: "Please wait a moment." })
+      return
+    }
+
     if (currentCoins < requiredCoins) {
-      toast({ variant: "destructive", title: "Insufficient Coins", description: `Wallet Balance: ${currentCoins} coins.` })
+      toast({ 
+        variant: "destructive", 
+        title: "Insufficient Coins", 
+        description: `You need ${requiredCoins} coins. Your balance: ${currentCoins} coins.` 
+      })
       return
     }
 
@@ -92,7 +102,10 @@ export default function MysteryNotePage() {
                <h2 className="text-2xl font-black text-white leading-tight">Write your<br/>secret...</h2>
                <div className="flex flex-col items-end">
                  <span className="text-[8px] font-black text-white/40 uppercase tracking-widest">My Balance</span>
-                 <span className="text-xs font-black text-white flex items-center gap-1.5 bg-black/20 px-3 py-1 rounded-full"><Coins className="w-3 h-3 text-yellow-400" />{userCoins}</span>
+                 <span className="text-xs font-black text-white flex items-center gap-1.5 bg-black/20 px-3 py-1 rounded-full">
+                   <Coins className="w-3 h-3 text-yellow-400" />
+                   {userCoins === null ? "..." : userCoins}
+                 </span>
                </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -127,7 +140,7 @@ export default function MysteryNotePage() {
             </div>
             <Button 
               onClick={handleSend} 
-              disabled={isSending || !message.trim()} 
+              disabled={isSending || !message.trim() || userCoins === null} 
               className="w-full h-18 rounded-full bg-white text-[#00A2FF] font-black uppercase tracking-[0.2em] text-sm shadow-2xl active:scale-95 transition-all py-8"
             >
               {isSending ? <Loader2 className="w-6 h-6 animate-spin" /> : <div className="flex items-center gap-3"><Send className="w-5 h-5" />Blast Message</div>}
