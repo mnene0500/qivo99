@@ -2,12 +2,12 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * @fileOverview Hardened Supabase Client for Production.
- * Optimized for Vercel Native actions.
+ * @fileOverview Standardized Supabase Client.
+ * Restored NEXT_PUBLIC prefixes for browser compatibility (required for chat/auth).
  */
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

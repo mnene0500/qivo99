@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS public.reports (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 3. ENABLE REALTIME SAFELY (Fixed Error 42710)
+-- 3. ENABLE REALTIME SAFELY
 DO $$ 
 BEGIN 
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
@@ -147,7 +147,7 @@ BEGIN
   END IF;
 END $$;
 
--- 'SET TABLE' replaces the list, avoiding Error 42710 if tables are already members
+-- 'SET TABLE' replaces the list, avoiding Error 42710
 ALTER PUBLICATION supabase_realtime SET TABLE 
   public.balances, 
   public.coin_history, 
@@ -171,7 +171,7 @@ ALTER TABLE public.agencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
--- 5. CREATE POLICIES (Hardened for UPSERT)
+-- 5. CREATE POLICIES
 DROP POLICY IF EXISTS "Users can manage own profile" ON public.users;
 CREATE POLICY "Users can manage own profile" ON public.users 
 FOR ALL USING (auth.uid() = uid) WITH CHECK (auth.uid() = uid);

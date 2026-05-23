@@ -7,8 +7,7 @@ const PESA_ENV = "https://pay.pesapal.com/v3";
 
 /**
  * @fileOverview Native PesaPal Integration for Vercel.
- * Uses PRIVATE environment variables.
- * Immunized against phishing via direct S2S fulfillment and transaction logging.
+ * Phishing protected via direct S2S verification and processed_payments ledger.
  */
 
 async function getPesapalToken() {
@@ -16,24 +15,17 @@ async function getPesapalToken() {
   const consumerSecret = process.env.PESAPAL_CONSUMER_SECRET;
 
   if (!consumerKey || !consumerSecret) {
-    throw new Error("Vercel Configuration Error: PesaPal secrets missing.");
+    throw new Error("PesaPal secrets missing in Vercel.");
   }
 
-  try {
-    const res = await fetch(`${PESA_ENV}/api/Auth/RequestToken`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        consumer_key: consumerKey,
-        consumer_secret: consumerSecret,
-      }),
-    });
-    const data = await res.json();
-    if (!data.token) throw new Error("PesaPal Authentication failed.");
-    return data.token;
-  } catch (err) {
-    throw new Error("Payment gateway connection failed.");
-  }
+  const res = await fetch(`${PESA_ENV}/api/Auth/RequestToken`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ consumer_key: consumerKey, consumer_secret: consumerSecret }),
+  });
+  const data = await res.json();
+  if (!data.token) throw new Error("Auth Token failure.");
+  return data.token;
 }
 
 export async function initiatePesaPalPayment(amount: number, user: { uid: string, email: string, name: string }) {
@@ -41,16 +33,14 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
     const token = await getPesapalToken();
     const orderId = crypto.randomUUID();
 
-    // 1. Record pending payment
-    const { error: pendingError } = await supabase.from("pending_payments").insert({
+    // 1. Log Pending
+    await supabase.from("pending_payments").insert({
       order_id: orderId,
       user_id: user.uid,
       amount: Number(amount),
       status: "pending"
     });
-    if (pendingError) throw new Error(`Database Log Error: ${pendingError.message}`);
 
-    // 2. Submit order to PesaPal
     const order = {
       id: orderId,
       currency: "KES",
@@ -63,19 +53,15 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
 
     const res = await fetch(`${PESA_ENV}/api/Transactions/SubmitOrderRequest`, {
       method: "POST",
-      headers: { 
-        "Content-Type": "application/json", 
-        "Authorization": `Bearer ${token}` 
-      },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify(order),
     });
     const data = await res.json();
 
-    if (!data.redirect_url) throw new Error(data.error?.message || "Gateway failed to generate redirect.");
+    if (!data.redirect_url) throw new Error("Failed to generate redirect.");
 
     return { success: true, redirect_url: data.redirect_url };
   } catch (err: any) {
-    console.error("[PesaPal Native Initiate Error]:", err.message);
     return { success: false, error: err.message };
   }
 }
@@ -84,7 +70,6 @@ export async function verifyPaymentAction(orderTrackingId: string, user_id: stri
   try {
     const token = await getPesapalToken();
     
-    // Direct S2S verification
     const verifyRes = await fetch(`${PESA_ENV}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`, {
       method: "GET",
       headers: { "Authorization": `Bearer ${token}` },
@@ -104,35 +89,22 @@ export async function verifyPaymentAction(orderTrackingId: string, user_id: stri
       else if (paidAmount === 1800) coins = 20000;
       else coins = Math.floor(paidAmount * 6.25);
 
-      // Check for duplicate fulfillment
-      const { data: existing } = await supabase
-        .from('processed_payments')
-        .select('order_tracking_id')
-        .eq('order_tracking_id', orderTrackingId)
-        .maybeSingle();
-      
-      if (existing) return { success: true, message: "Already fulfilled", coins_added: 0 };
+      // Idempotency check
+      const { data: existing } = await supabase.from('processed_payments').select('*').eq('order_tracking_id', orderTrackingId).maybeSingle();
+      if (existing) return { success: true, message: "Fulfilled", coins_added: 0 };
 
-      // Atomic fulfillment
+      // Atomic award
       const { error: rpcError } = await supabase.rpc("increment_coins", { user_id, amount: coins });
-      if (rpcError) throw new Error(`Balance Update Failed: ${rpcError.message}`);
+      if (rpcError) throw rpcError;
 
       await supabase.from('processed_payments').insert({ order_tracking_id: orderTrackingId, user_id, amount: paidAmount, coins });
-      
-      await supabase.from("coin_history").insert({
-        user_id,
-        amount: coins,
-        type: "recharge",
-        description: "PesaPal Recharge",
-        timestamp: Date.now()
-      });
+      await supabase.from("coin_history").insert({ user_id, amount: coins, type: "recharge", description: "PesaPal Recharge", timestamp: Date.now() });
 
       return { success: true, coins_added: coins };
     }
     
-    return { success: false, message: "Payment pending or failed at gateway." };
+    return { success: false, message: "Pending" };
   } catch (err: any) {
-    console.error("[PesaPal Native Verify Error]:", err.message);
-    return { success: false, error: "Network error during verification." };
+    return { success: false, error: "Verification failed." };
   }
 }

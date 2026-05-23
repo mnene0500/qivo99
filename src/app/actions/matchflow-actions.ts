@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview Native Economy Actions on Vercel.
- * Migrated from Edge Functions to provide zero-latency atomic transactions.
+ * Purely server-side atomic transactions.
  */
 
 export async function dailyCheckInAction(uid: string) {
