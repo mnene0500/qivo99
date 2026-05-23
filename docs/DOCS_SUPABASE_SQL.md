@@ -1,7 +1,7 @@
 
 # QIVO Production SQL (Run in SQL Editor)
 
-This script sets up all tables and the **CRITICAL** storage RLS policies for your buckets.
+This script sets up all tables and the **CONSOLIDATED** storage RLS policies for the single 'photos' bucket.
 
 ```sql
 -- 1. SETUP ATOMIC HELPERS
@@ -25,19 +25,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. CORE TABLES (IF NOT ALREADY CREATED)
+-- 2. CREATE CORE TABLES
 -- [Run table creation from earlier docs if starting from scratch]
 
--- 3. ENABLE RLS FOR STORAGE BUCKETS
--- Profile Photos (Public read, Private write)
-CREATE POLICY "Public Read Profile Photos" ON storage.objects FOR SELECT USING (bucket_id = 'profile-photos');
-CREATE POLICY "Users can upload own profile photo" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'profile-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
-CREATE POLICY "Users can update own profile photo" ON storage.objects FOR UPDATE USING (bucket_id = 'profile-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
+-- 3. ENABLE RLS FOR 'photos' STORAGE BUCKET
+-- Public read access for all photos
+CREATE POLICY "Public Read Photos" ON storage.objects FOR SELECT USING (bucket_id = 'photos');
 
--- Post Photos (Public read, Private write)
-CREATE POLICY "Public Read Post Photos" ON storage.objects FOR SELECT USING (bucket_id = 'post-photos');
-CREATE POLICY "Users can upload own post photos" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'post-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
-CREATE POLICY "Users can delete own post photos" ON storage.objects FOR DELETE USING (bucket_id = 'post-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
+-- Avatars: Only owner can upload/update their own avatar
+CREATE POLICY "Users can manage own avatar" ON storage.objects FOR ALL USING (
+  bucket_id = 'photos' AND (storage.foldername(name))[1] = 'avatars' AND (storage.foldername(name))[2] = (auth.uid()::text || '.jpg')
+);
+
+-- Posts: Only owner can manage photos in their own posts folder
+CREATE POLICY "Users can manage own posts" ON storage.objects FOR ALL USING (
+  bucket_id = 'photos' AND (storage.foldername(name))[1] = 'posts' AND (storage.foldername(name))[2] = auth.uid()::text
+);
 
 -- 4. REPORT SYSTEM RLS
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
