@@ -175,7 +175,6 @@ export default function MePage() {
     if (!user && isInitialized && !authLoading) router.replace("/welcome")
     if (!user?.id) return
 
-    // 1. Initial Fetch (Always Fresh)
     const fetchProfile = async () => {
       const { data } = await supabase.from('users').select('*').eq('uid', user.id).maybeSingle()
       if (data) {
@@ -185,14 +184,12 @@ export default function MePage() {
     }
     fetchProfile()
 
-    // 2. Real-time Profile Listener
     const profileChannel = supabase.channel(`profile-sync:${user.id}`)
       .on('postgres_changes', { event: '*', table: 'users', filter: `uid=eq.${user.id}` }, (payload) => {
         setProfile(payload.new as any)
       })
       .subscribe()
 
-    // 3. Real-time Balance Listener
     const balanceChannel = supabase.channel(`balance-sync:${user.id}`)
       .on('postgres_changes', { event: '*', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
         setBalances({ coins: payload.new.coins || 0, diamonds: Number(payload.new.diamonds) || 0 })
@@ -222,7 +219,6 @@ export default function MePage() {
     return <div className="flex-1 bg-[#F8F9FA] min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
   }
 
-  // Visual Cache Buster ensure instant refresh
   const freshPhotoUrl = profile?.photo_url ? `${profile.photo_url}?t=${Date.now()}` : null;
   
   return (
@@ -278,12 +274,12 @@ export default function MePage() {
 
         <main className="px-6 space-y-6">
           <div className="grid grid-cols-2 gap-4 relative z-20 -mt-6">
-            <Button className="h-20 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1 text-[#00A2FF]" onClick={() => router.push("/recharge")}>
+            <Button className="h-20 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1 text-[#00A2FF]">
               <div className="flex items-center gap-1.5">
                 <CircleDollarSign className="w-5 h-5" />
                 <span className="text-sm font-bold">{balances.coins}</span>
               </div>
-              <span className="text-[8px] font-bold uppercase opacity-60">Recharge</span>
+              <span className="text-[8px] font-bold uppercase opacity-60">Wallet Balance</span>
             </Button>
             <Button className="h-20 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1 text-black" onClick={() => router.push("/income")}>
               <div className="flex items-center gap-1.5">
