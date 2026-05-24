@@ -5,7 +5,6 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 /**
  * @fileOverview Native Economy Actions on Vercel.
  * Purely server-side atomic transactions using private secrets.
- * Standardized to use MatchFlow ID for targeting users.
  */
 
 export async function dailyCheckInAction(uid: string) {
@@ -67,7 +66,7 @@ export async function dailyCheckInAction(uid: string) {
 export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: string, amount: number) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Verify Caller Authority strictly via Table Query
+    // 1. Verify Caller Authority strictly via Table Query using Admin Client (Bypasses RLS)
     const { data: merchant, error: authErr } = await supabase
       .from('users')
       .select('uid, email, is_admin, is_coin_seller, name')
