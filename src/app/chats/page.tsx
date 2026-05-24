@@ -73,7 +73,6 @@ function ChatsContent() {
   const [activeChatClearedAt, setActiveChatClearedAt] = useState<number>(0)
   const [isGifting, setIsGifting] = useState(false)
   const [giftDialogOpen, setGiftDialogOpen] = useState(false)
-  const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
 
   const fetchSummaries = useCallback(async () => {
     if (!currentUser?.id) return
@@ -132,8 +131,12 @@ function ChatsContent() {
       const ids = [currentUser.id, startWithId].sort()
       const cId = `direct_${ids[0]}_${ids[1]}`
       setChatId(cId)
-      setMessages([])
+      setMessages([]) // Important: Clear messages instantly to prevent blinking
+      
+      // Get partner profile
       supabase.from('users').select('uid, name, photo_url, is_verified, blocking, blocked_by').eq('uid', startWithId).maybeSingle().then(({ data }) => setPartnerProfile(data))
+      
+      // Get cleared timestamp before loading messages
       supabase.from('chats').select('cleared_at').eq('id', cId).maybeSingle().then(({ data }) => {
         const cleared = (data?.cleared_at as Record<string, number>)?.[currentUser.id] || 0
         setActiveChatClearedAt(cleared)
@@ -148,7 +151,7 @@ function ChatsContent() {
         .from('messages')
         .select('id, text, sender_id, timestamp, is_gift')
         .eq('chat_id', chatId)
-        .gt('timestamp', activeChatClearedAt)
+        .gt('timestamp', activeChatClearedAt) // Only messages after clear time
         .order('timestamp', { ascending: false })
         .limit(40)
       if (data) setMessages(data)
@@ -185,21 +188,35 @@ function ChatsContent() {
   const handleClearChat = async (id?: string) => {
     const targetId = id || chatId
     if (!currentUser || !targetId) return
+
+    // Optimistic UI: Remove from list immediately
+    setChatSummaries(prev => prev.filter(s => s.id !== targetId))
+    
     const res = await clearChatAction(currentUser.id, targetId)
     if (res.success) {
       toast({ title: "Chat Deleted" })
-      if (!id) { setMessages([]); router.push("/chats") }
-      else fetchSummaries()
-      setDeletingChatId(null)
+      if (!id) { 
+        setMessages([]); 
+        router.push("/chats") 
+      }
+    } else {
+      // Revert summaries if failed
+      fetchSummaries()
     }
   }
 
   const handleStartCall = async (type: 'video' | 'voice') => {
     if (!currentUser || !startWithId || !chatId) return
     const balanceCheck = await checkCallBalanceAction(currentUser.id, type)
-    if (!balanceCheck.success) { toast({ variant: "destructive", title: "Insufficient Coins" }); router.push("/recharge"); return; }
+    if (!balanceCheck.success) { 
+      toast({ variant: "destructive", title: "Insufficient Coins" }); 
+      router.push("/recharge"); 
+      return; 
+    }
     const res = await startCallAction(chatId, currentUser.id, startWithId, type)
-    if (res.success) { router.push(`/call/${chatId}?type=${type}&partnerId=${startWithId}&callId=${res.callId}`); }
+    if (res.success) { 
+      router.push(`/call/${chatId}?type=${type}&partnerId=${startWithId}&callId=${res.callId}`); 
+    }
   }
 
   // Bidirectional Block Logic

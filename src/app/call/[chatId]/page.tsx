@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useRef, use } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { PhoneOff, Mic, MicOff, Video, VideoOff, User } from "lucide-react"
+import { PhoneOff, Mic, MicOff, Video, VideoOff, User, Loader2 } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { supabase } from "@/lib/supabase"
 import { generateAgoraTokenAction, deductCallCoinsAction, endCallAction } from "@/app/actions/call-actions"
@@ -11,8 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 /**
- * @fileOverview Agora Call Page implemented using Voice SDK Quick Start logic.
- * Optimized for stability and 40s answer timeout.
+ * @fileOverview Agora Call Page implemented using official Quick Start logic.
+ * Optimized for stability, audio/video synchronization, and 40s answer timeout.
  */
 
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -25,6 +25,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const partnerId = searchParams.get("partnerId")
   const callId = searchParams.get("callId")
 
+  // RTC client instance and tracks stored in refs to survive re-renders
   const rtc = useRef<{ 
     client: any, 
     localAudioTrack: any, 
@@ -53,7 +54,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     supabase.from('users').select('uid, name, photo_url').eq('uid', partnerId).single().then(({ data }) => setPartnerProfile(data))
   }, [partnerId])
 
-  // REALTIME SIGNALING: Listen for "ended" status
+  // REALTIME SIGNALING: Listen for "ended" status from the other side
   useEffect(() => {
     if (!callId) return
     const channel = supabase.channel(`call-sig-${callId}`)
@@ -70,18 +71,21 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   useEffect(() => {
     if (joined && isRinging) {
       ringTimeout.current = setTimeout(() => {
-        if (!remoteUser) handleEndCall(true)
+        if (!remoteUser) {
+          handleEndCall(true)
+        }
       }, 40000)
     }
     return () => { if (ringTimeout.current) clearTimeout(ringTimeout.current) }
   }, [joined, isRinging, remoteUser])
 
-  // BILLING TIMER (Starts when remote user joins)
+  // BILLING TIMER: Starts when remote user joins
   useEffect(() => {
     if (joined && remoteUser && user?.id && partnerId) {
       billingTimer.current = setInterval(async () => {
         setDuration(prev => {
           const next = prev + 1
+          // Billing Logic: Deduction at 11s (end of free preview) and then every 60s
           const isDeductionPoint = next === 11 || (next > 11 && (next - 11) % 60 === 0);
           if (isDeductionPoint) {
             deductCallCoinsAction(user.id, type, partnerId).then(res => {
@@ -97,52 +101,32 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
   useEffect(() => {
     let mounted = true;
+
     const init = async () => {
       if (typeof window === 'undefined' || !user?.id || !chatId) return
+      
       try {
         const AgoraRTC = (await import('agora-rtc-sdk-ng')).default
+        
+        // 1. Initialize client
         const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
-        const tokenData = await generateAgoraTokenAction(chatId, user.id)
-        
-        if (!mounted) return;
+        rtc.current.client = client
 
-        // 1. Join Channel
-        await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid)
-        
-        // 2. Create Local Tracks
-        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
-        let videoTrack = null
-        if (type === 'video') {
-          videoTrack = await AgoraRTC.createCameraVideoTrack()
-        }
-
-        if (!mounted) {
-          audioTrack.close();
-          if (videoTrack) videoTrack.close();
-          await client.leave();
-          return;
-        }
-
-        // 3. Publish Local Tracks
-        await client.publish(videoTrack ? [audioTrack, videoTrack] : [audioTrack])
-        
-        if (localVideoRef.current && videoTrack) {
-          videoTrack.play(localVideoRef.current)
-        }
-
-        rtc.current = { client, localAudioTrack: audioTrack, localVideoTrack: videoTrack }
-        setJoined(true)
-
-        // 4. Set up Remote Event Listeners (Quick Start Guide Logic)
+        // 2. Set up event listeners BEFORE joining (SDK Requirement)
         client.on("user-published", async (user, mediaType) => {
           await client.subscribe(user, mediaType)
+          
           if (mediaType === "video") {
             setRemoteUser(user)
             setIsRinging(false)
+            // Small delay to ensure DOM is ready
             setTimeout(() => {
-              if (remoteVideoRef.current) user.videoTrack?.play(remoteVideoRef.current)
-            }, 100)
+              if (remoteVideoRef.current) {
+                user.videoTrack?.play(remoteVideoRef.current)
+              }
+            }, 150)
           }
+          
           if (mediaType === "audio") {
             user.audioTrack?.play()
             setIsRinging(false)
@@ -151,13 +135,49 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         })
 
         client.on("user-unpublished", (user) => {
-          if (user.uid === remoteUser?.uid) setRemoteUser(null)
+          if (user.uid === remoteUser?.uid) {
+            setRemoteUser(null)
+          }
         })
 
         client.on("user-left", () => {
           handleEndCall(false)
         })
+
+        // 3. Generate Token and Join
+        const tokenData = await generateAgoraTokenAction(chatId, user.id)
+        if (!mounted) return;
+
+        await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid)
+        
+        // 4. Create Local Tracks
+        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
+        rtc.current.localAudioTrack = audioTrack
+        
+        let videoTrack = null
+        if (type === 'video') {
+          videoTrack = await AgoraRTC.createCameraVideoTrack()
+          rtc.current.localVideoTrack = videoTrack
+        }
+
+        if (!mounted) {
+          if (audioTrack) { audioTrack.stop(); audioTrack.close(); }
+          if (videoTrack) { videoTrack.stop(); videoTrack.close(); }
+          await client.leave();
+          return;
+        }
+
+        // 5. Display local video if applicable
+        if (localVideoRef.current && videoTrack) {
+          videoTrack.play(localVideoRef.current)
+        }
+
+        // 6. Publish
+        await client.publish(videoTrack ? [audioTrack, videoTrack] : [audioTrack])
+        setJoined(true)
+
       } catch (err) {
+        console.error("Agora Init Error:", err)
         if (mounted) router.replace('/home')
       }
     }
@@ -175,10 +195,22 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
   const handleEndCall = async (manual = true) => {
     const { client, localAudioTrack, localVideoTrack } = rtc.current;
-    if (localAudioTrack) { localAudioTrack.stop(); localAudioTrack.close(); }
-    if (localVideoTrack) { localVideoTrack.stop(); localVideoTrack.close(); }
-    if (client) { try { await client.leave() } catch (e) {} }
-    if (manual && callId) { await endCallAction(callId) }
+    
+    // Cleanup tracks
+    if (localAudioTrack) { localAudioTrack.stop(); localAudioTrack.close(); rtc.current.localAudioTrack = null; }
+    if (localVideoTrack) { localVideoTrack.stop(); localVideoTrack.close(); rtc.current.localVideoTrack = null; }
+    
+    // Leave channel
+    if (client) { 
+      try { await client.leave() } catch (e) {} 
+      rtc.current.client = null;
+    }
+
+    // Inform server
+    if (manual && callId) { 
+      await endCallAction(callId) 
+    }
+
     router.replace(`/chats?startWith=${partnerId}`)
   }
 
