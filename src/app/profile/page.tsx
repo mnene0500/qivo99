@@ -29,7 +29,7 @@ export default function MePage() {
     if (!user?.id) return
     const { data } = await supabase
       .from('users')
-      .select('uid, name, photo_url, match_flow_id, is_verified, is_admin, is_coin_seller, is_agent, gender, agency_id, agency_status')
+      .select('uid, name, photo_url, match_flow_id, is_verified, is_admin, is_coin_seller, is_agent, gender, agency_id, agency_status, updated_at')
       .eq('uid', user.id)
       .maybeSingle();
     if (data) setProfile(data)
@@ -49,7 +49,7 @@ export default function MePage() {
       <div className="relative z-10">
         <header className="pt-12 pb-10 px-6 flex flex-col items-center text-center">
           <div className="relative mb-4">
-            <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-white border-4 border-white/20">
+            <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-white">
               <Image src={`${profile?.photo_url}?t=${profile?.updated_at || Date.now()}`} alt={profile?.name || "Me"} fill className="object-cover" sizes="112px" />
             </div>
             <button className="absolute bottom-1 right-1 bg-white p-3 rounded-full shadow-xl" onClick={() => router.push('/edit-profile')}><Pencil className="w-4 h-4 text-[#00A2FF]" /></button>
