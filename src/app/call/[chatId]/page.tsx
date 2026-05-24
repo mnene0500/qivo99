@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useRef, use } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { PhoneOff, Mic, MicOff, Video, VideoOff, Loader2, User, Timer } from "lucide-react"
+import { PhoneOff, Mic, MicOff, Video, VideoOff, User } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { supabase } from "@/lib/supabase"
 import { generateAgoraTokenAction, deductCallCoinsAction, endCallAction } from "@/app/actions/call-actions"
@@ -11,8 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 /**
- * @fileOverview Hardened Agora Call Page.
- * Prevents crashes during init and implements a 40s answer timeout.
+ * @fileOverview Agora Call Page implemented using Voice SDK Quick Start logic.
+ * Optimized for stability and 40s answer timeout.
  */
 
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -25,7 +25,11 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const partnerId = searchParams.get("partnerId")
   const callId = searchParams.get("callId")
 
-  const rtc = useRef<{ client: any, localAudioTrack: any, localVideoTrack: any }>({ 
+  const rtc = useRef<{ 
+    client: any, 
+    localAudioTrack: any, 
+    localVideoTrack: any 
+  }>({ 
     client: null, 
     localAudioTrack: null, 
     localVideoTrack: null 
@@ -49,7 +53,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     supabase.from('users').select('uid, name, photo_url').eq('uid', partnerId).single().then(({ data }) => setPartnerProfile(data))
   }, [partnerId])
 
-  // REALTIME SIGNALING: Listen for "ended" status from the partner
+  // REALTIME SIGNALING: Listen for "ended" status
   useEffect(() => {
     if (!callId) return
     const channel = supabase.channel(`call-sig-${callId}`)
@@ -66,25 +70,20 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   useEffect(() => {
     if (joined && isRinging) {
       ringTimeout.current = setTimeout(() => {
-        if (!remoteUser) {
-          handleEndCall(true) // Auto-end if not accepted in 40s
-        }
+        if (!remoteUser) handleEndCall(true)
       }, 40000)
     }
     return () => { if (ringTimeout.current) clearTimeout(ringTimeout.current) }
   }, [joined, isRinging, remoteUser])
 
-  // BILLING TIMER: Only starts when the remote user joins
+  // BILLING TIMER (Starts when remote user joins)
   useEffect(() => {
     if (joined && remoteUser && user?.id && partnerId) {
       billingTimer.current = setInterval(async () => {
         setDuration(prev => {
           const next = prev + 1
-          // 11th second is the first deduction point (after 10s free)
-          const isFirstMinuteDeduction = next === 11;
-          const isSubsequentMinuteDeduction = next > 11 && (next - 11) % 60 === 0;
-
-          if (isFirstMinuteDeduction || isSubsequentMinuteDeduction) {
+          const isDeductionPoint = next === 11 || (next > 11 && (next - 11) % 60 === 0);
+          if (isDeductionPoint) {
             deductCallCoinsAction(user.id, type, partnerId).then(res => {
               if (!res.success) handleEndCall(true)
             })
@@ -107,11 +106,12 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         
         if (!mounted) return;
 
+        // 1. Join Channel
         await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid)
         
+        // 2. Create Local Tracks
         const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
         let videoTrack = null
-        
         if (type === 'video') {
           videoTrack = await AgoraRTC.createCameraVideoTrack()
         }
@@ -123,6 +123,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           return;
         }
 
+        // 3. Publish Local Tracks
         await client.publish(videoTrack ? [audioTrack, videoTrack] : [audioTrack])
         
         if (localVideoRef.current && videoTrack) {
@@ -132,19 +133,20 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         rtc.current = { client, localAudioTrack: audioTrack, localVideoTrack: videoTrack }
         setJoined(true)
 
-        client.on("user-published", async (remoteUser, mediaType) => {
-          await client.subscribe(remoteUser, mediaType)
+        // 4. Set up Remote Event Listeners (Quick Start Guide Logic)
+        client.on("user-published", async (user, mediaType) => {
+          await client.subscribe(user, mediaType)
           if (mediaType === "video") {
-            setRemoteUser(remoteUser)
+            setRemoteUser(user)
             setIsRinging(false)
             setTimeout(() => {
-              if (remoteVideoRef.current) remoteUser.videoTrack?.play(remoteVideoRef.current)
+              if (remoteVideoRef.current) user.videoTrack?.play(remoteVideoRef.current)
             }, 100)
           }
           if (mediaType === "audio") {
-            remoteUser.audioTrack?.play()
+            user.audioTrack?.play()
             setIsRinging(false)
-            setRemoteUser(prev => prev || remoteUser)
+            setRemoteUser(prev => prev || user)
           }
         })
 
@@ -156,7 +158,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           handleEndCall(false)
         })
       } catch (err) {
-        console.error("Agora Init Failed", err)
         if (mounted) router.replace('/home')
       }
     }
@@ -168,7 +169,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
       const { client, localAudioTrack, localVideoTrack } = rtc.current;
       if (localAudioTrack) { localAudioTrack.stop(); localAudioTrack.close(); }
       if (localVideoTrack) { localVideoTrack.stop(); localVideoTrack.close(); }
-      if (client) { client.leave().catch(() => {}); }
+      if (client) client.leave().catch(() => {});
     }
   }, [chatId, user?.id])
 
@@ -216,13 +217,12 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
                </Avatar>
              </div>
              <h2 className="text-white text-2xl font-black mt-6 tracking-tight">{partnerProfile?.name || 'Connecting...'}</h2>
-             
              <div className="flex flex-col items-center gap-2 mt-4">
                 <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em]">
                   {joined ? (remoteUser ? formatDuration(duration) : 'Ringing...') : 'Initializing...'}
                 </p>
                 {remoteUser && duration < 11 && (
-                  <div className="px-4 py-1.5 bg-green-500/20 text-green-400 rounded-full border border-green-500/30 animate-pulse">
+                  <div className="px-4 py-1.5 bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
                     <p className="text-[10px] font-black uppercase tracking-widest">Free Preview: {10 - duration}s</p>
                   </div>
                 )}
@@ -238,25 +238,14 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
       )}
 
       <div className="absolute bottom-16 inset-x-0 px-8 flex items-center justify-center gap-6 z-50">
-        <button 
-          onClick={toggleMute}
-          className={cn("w-16 h-16 rounded-full backdrop-blur-xl border border-white/10 shadow-2xl transition-all active:scale-90 flex items-center justify-center", muted ? "bg-red-500 text-white" : "bg-white/10 text-white")}
-        >
+        <button onClick={toggleMute} className={cn("w-16 h-16 rounded-full backdrop-blur-xl border border-white/10 shadow-2xl transition-all active:scale-90 flex items-center justify-center", muted ? "bg-red-500 text-white" : "bg-white/10 text-white")}>
           {muted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
         </button>
-
-        <button 
-          onClick={() => handleEndCall(true)}
-          className="w-20 h-20 rounded-full bg-red-600 text-white shadow-2xl shadow-red-500/40 border-4 border-white/10 active:scale-95 transition-all flex items-center justify-center"
-        >
+        <button onClick={() => handleEndCall(true)} className="w-20 h-20 rounded-full bg-red-600 text-white shadow-2xl shadow-red-500/40 border-4 border-white/10 active:scale-95 transition-all flex items-center justify-center">
           <PhoneOff className="w-8 h-8" />
         </button>
-
         {type === 'video' && (
-          <button 
-            onClick={toggleCamera}
-            className={cn("w-16 h-16 rounded-full backdrop-blur-xl border border-white/10 shadow-2xl transition-all active:scale-90 flex items-center justify-center", cameraOff ? "bg-red-500 text-white" : "bg-white/10 text-white")}
-          >
+          <button onClick={toggleCamera} className={cn("w-16 h-16 rounded-full backdrop-blur-xl border border-white/10 shadow-2xl transition-all active:scale-90 flex items-center justify-center", cameraOff ? "bg-red-500 text-white" : "bg-white/10 text-white")}>
             {cameraOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
           </button>
         )}

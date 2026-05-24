@@ -202,6 +202,7 @@ function ChatsContent() {
     if (res.success) { router.push(`/call/${chatId}?type=${type}&partnerId=${startWithId}&callId=${res.callId}`); }
   }
 
+  // Bidirectional Block Logic
   const isBidirectionalBlocked = partnerProfile && (
     (partnerProfile.blocking || []).includes(currentUser?.id) || 
     (partnerProfile.blocked_by || []).includes(currentUser?.id)
@@ -221,12 +222,7 @@ function ChatsContent() {
             <p className="font-bold text-xs uppercase tracking-widest">No conversations</p>
           </div>
         ) : chatSummaries.map(s => (
-          <div 
-            key={s.id} 
-            onContextMenu={(e) => { e.preventDefault(); setDeletingChatId(s.id); }}
-            onClick={() => router.push(`/chats?startWith=${s.partner_id}`)} 
-            className="p-5 flex items-center gap-4 active:bg-gray-50 border-b border-gray-50 transition-colors"
-          >
+          <div key={s.id} onClick={() => router.push(`/chats?startWith=${s.partner_id}`)} className="p-5 flex items-center gap-4 active:bg-gray-50 border-b border-gray-50 transition-colors">
             <div className="relative">
               <Avatar className="w-14 h-14 border"><AvatarImage src={s.partner_photo} className="object-cover" /><AvatarFallback>{s.partner_name[0]}</AvatarFallback></Avatar>
               {s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm">{s.unread_count}</div>}
@@ -244,15 +240,6 @@ function ChatsContent() {
           </div>
         ))}
       </main>
-
-      <AlertDialog open={!!deletingChatId} onOpenChange={(open) => !open && setDeletingChatId(null)}>
-        <AlertDialogContent className="rounded-[2rem] max-w-[70vw] p-8 border-none">
-          <AlertDialogFooter className="flex flex-row items-center justify-center gap-6">
-            <AlertDialogCancel className="flex-1 h-14 rounded-full bg-gray-50 text-gray-400 font-black uppercase text-[10px] border-none">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => handleClearChat(deletingChatId!)} className="flex-1 h-14 rounded-full bg-red-500 text-white font-black uppercase text-[10px] shadow-lg shadow-red-100">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 
@@ -260,10 +247,7 @@ function ChatsContent() {
     <div className="flex flex-col h-screen bg-white select-none overflow-hidden">
       <header className="h-16 border-b flex items-center px-4 gap-4 bg-white z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
-        <div 
-          className="flex items-center gap-3 flex-1 cursor-pointer active:opacity-70 transition-opacity min-w-0" 
-          onClick={() => router.push(`/users/${startWithId}`)}
-        >
+        <div className="flex items-center gap-3 flex-1 cursor-pointer active:opacity-70 transition-opacity min-w-0" onClick={() => router.push(`/users/${startWithId}`)}>
           <Avatar className="w-10 h-10 border shrink-0"><AvatarImage src={partnerProfile?.photo_url} className="object-cover" /><AvatarFallback>{partnerProfile?.name?.[0]}</AvatarFallback></Avatar>
           <div className="min-w-0 flex items-center gap-1.5">
             <p className="font-black text-sm leading-none truncate">{partnerProfile?.name || '...'}</p>

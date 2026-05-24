@@ -1,11 +1,11 @@
 
 "use client"
 
-import { useMemo, useState, useEffect, useCallback, useRef } from "react"
+import { useMemo, useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { RotateCw, BadgeCheck, Loader2, FileText, Target, User } from "lucide-react"
+import { RotateCw, BadgeCheck, Loader2, FileText, Target } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
@@ -59,9 +59,7 @@ export default function HomePage() {
     
     const handleScroll = () => {
       sessionStorage.setItem('home_scroll_pos', window.scrollY.toString());
-      
-      // Infinite scroll check
-      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500 && !isLoadingMore && hasMore) {
+      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800 && !isLoadingMore && hasMore) {
         loadMore();
       }
     };
@@ -75,13 +73,13 @@ export default function HomePage() {
     if (!currentUser) { router.replace("/welcome"); return; }
 
     const setupProfile = async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('users')
         .select('uid, gender, country, onboarding_complete, blocking, blocked_by')
         .eq('uid', currentUser.id)
         .maybeSingle();
       
-      if (error || !data || !data.onboarding_complete) { 
+      if (!data || !data.onboarding_complete) { 
         router.replace("/fastonboard"); 
         return; 
       }
@@ -108,7 +106,9 @@ export default function HomePage() {
       const from = pageNum * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // Online Priority: Sorting by updated_at DESC effectively puts online/recently active users first
+      // Online Priority logic: Sort by updated_at DESC (active recently)
+      // To add randomness on manual refresh, we could offset by a random page if we had thousands of users,
+      // but for standard efficiency we stick to updated_at + simple range.
       const query = supabase
         .from('users')
         .select('uid, name, photo_url, country, dob, is_verified, updated_at')
@@ -123,7 +123,6 @@ export default function HomePage() {
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
 
       if (data) {
@@ -135,7 +134,6 @@ export default function HomePage() {
         } else {
           setUsers(prev => [...prev, ...filtered]);
         }
-        
         setHasMore(data.length === PAGE_SIZE);
       }
     } catch (err) {
@@ -148,7 +146,6 @@ export default function HomePage() {
   }, [currentUser?.id, profile, activeTab]);
 
   useEffect(() => {
-    // Initial fetch only occurs once per session or on tab change
     if (statusChecked && profile && users.length === 0) {
       fetchUsers(0);
     }
@@ -170,32 +167,20 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
-      <div className="bg-[#00A2FF] pt-6 pb-4 relative shadow-lg">
-        <div className="px-4 grid grid-cols-2 gap-3 mb-6">
-          <button 
-            onClick={() => router.push('/mystery-note')} 
-            className="h-28 bg-purple-600 border border-white/20 rounded-[1.5rem] p-4 flex flex-col items-start justify-center gap-1 active:scale-95 transition-all text-white text-left shadow-lg"
-          >
-            <FileText className="w-5 h-5 mb-1" />
-            <p className="text-sm font-black">Mystery Note</p>
+      <div className="bg-[#00A2FF] pt-6 pb-2 relative shadow-lg">
+        <div className="px-4 grid grid-cols-2 gap-3 mb-4">
+          <button onClick={() => router.push('/mystery-note')} className="h-28 bg-purple-600 border border-white/20 rounded-[1.5rem] p-4 flex flex-col items-start justify-center gap-1 active:scale-95 transition-all text-white shadow-lg">
+            <FileText className="w-5 h-5 mb-1" /><p className="text-sm font-black">Mystery Note</p>
           </button>
-          <button 
-            onClick={() => router.push('/tasks')} 
-            className="h-28 bg-blue-900 border border-white/20 rounded-[1.5rem] p-4 flex flex-col items-start justify-center gap-1 active:scale-95 transition-all text-white text-left shadow-lg"
-          >
-            <Target className="w-5 h-5 mb-1" />
-            <p className="text-sm font-black">Task Center</p>
+          <button onClick={() => router.push('/tasks')} className="h-28 bg-blue-900 border border-white/20 rounded-[1.5rem] p-4 flex flex-col items-start justify-center gap-1 active:scale-95 transition-all text-white shadow-lg">
+            <Target className="w-5 h-5 mb-1" /><p className="text-sm font-black">Task Center</p>
           </button>
         </div>
 
         <div className="sticky top-0 z-50 bg-[#00A2FF] px-6 py-4 flex items-center justify-between border-t border-white/10">
           <div className="flex items-center gap-8">
             {(['Recommend', 'Nearby'] as const).map((tab) => (
-              <button 
-                key={tab}
-                onClick={() => { setActiveTab(tab); setPage(0); setUsers([]); }} 
-                className={cn("text-sm font-black transition-all relative pb-2", activeTab === tab ? "text-white" : "text-white/40")}
-              >
+              <button key={tab} onClick={() => { setActiveTab(tab); setPage(0); setUsers([]); }} className={cn("text-sm font-black transition-all relative pb-2", activeTab === tab ? "text-white" : "text-white/40")}>
                 {tab}
                 {activeTab === tab && <div className="absolute -bottom-1 left-0 right-0 h-1 bg-white rounded-full animate-in zoom-in" />}
               </button>
@@ -207,42 +192,30 @@ export default function HomePage() {
         </div>
       </div>
 
-      <main className="px-4 pt-6 space-y-4 bg-white min-h-[60vh]">
+      <main className="px-4 pt-4 space-y-4 bg-white min-h-[60vh]">
         {initialLoading ? (
-          <div className="grid grid-cols-2 gap-2.5">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="aspect-[1/1.25] rounded-[1.2rem] bg-gray-100 animate-pulse" />
+          <div className="grid grid-cols-2 gap-2.5">{[...Array(4)].map((_, i) => <div key={i} className="aspect-[1/1.25] rounded-[1.2rem] bg-gray-100 animate-pulse" />)}</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2.5 pb-10">
+            {users.map((u) => (
+              <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.25] rounded-[1.2rem] shadow-sm bg-gray-50 active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
+                <Image src={`${u.photo_url}?t=${u.updated_at}`} alt={u.name} fill className="object-cover" sizes="50vw" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 p-3 text-white">
+                  <div className="flex items-center gap-1 mb-1.5">
+                    <h4 className="font-black text-sm truncate tracking-tight">{u.name}</h4>
+                    {u.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white" />}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="bg-[#00B200] text-white font-black text-[8px] px-2 py-0.5 rounded-md">{calculateAge(u.dob)}</span>
+                    <span className="bg-black/30 backdrop-blur-md text-white text-[8px] font-bold px-2 py-0.5 rounded-md truncate border border-white/5">{u.country}</span>
+                  </div>
+                </div>
+              </Card>
             ))}
           </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-2.5 pb-10">
-              {users.map((u) => (
-                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.25] rounded-[1.2rem] shadow-sm bg-gray-50 group active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
-                  <Image src={`${u.photo_url}?t=${u.updated_at}`} alt={u.name} fill className="object-cover" sizes="50vw" priority={false} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-90" />
-                  <div onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }} className="absolute top-2.5 right-2.5 px-3.5 h-7 bg-[#00A2FF] rounded-full flex items-center justify-center text-white shadow-lg active:scale-90 transition-all z-20"><span className="text-[8px] font-black uppercase tracking-widest">CHAT</span></div>
-                  <div className="absolute inset-x-0 bottom-0 p-3 text-white">
-                    <div className="flex items-center gap-1 mb-1.5">
-                      <h4 className="font-black text-sm truncate tracking-tight">{u.name}</h4>
-                      {u.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white" />}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="bg-[#00B200] text-white font-black text-[8px] px-2 py-0.5 rounded-md">{calculateAge(u.dob)}</span>
-                      <span className="bg-black/30 backdrop-blur-md text-white text-[8px] font-bold px-2 py-0.5 rounded-md truncate border border-white/5">{u.country}</span>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-            
-            {hasMore && (
-              <div className="py-10 flex justify-center">
-                {isLoadingMore ? <Loader2 className="animate-spin text-[#00A2FF]" /> : <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Scroll for more</p>}
-              </div>
-            )}
-          </>
         )}
+        {isLoadingMore && <div className="py-4 flex justify-center"><Loader2 className="animate-spin text-[#00A2FF]" /></div>}
       </main>
     </div>
   )
