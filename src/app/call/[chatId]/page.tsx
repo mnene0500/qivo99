@@ -1,8 +1,9 @@
+
 "use client"
 
 import { useEffect, useState, useRef, use } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { PhoneOff, Mic, MicOff, Video, VideoOff, Loader2, User } from "lucide-react"
+import { PhoneOff, Mic, MicOff, Video, VideoOff, Loader2, User, Timer } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { supabase } from "@/lib/supabase"
 import { generateAgoraTokenAction, deductCallCoinsAction, endCallAction } from "@/app/actions/call-actions"
@@ -10,8 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 /**
- * @fileOverview Streamlined & Hardened Agora Call Page.
- * Removed intermediate "Securing Connection" overlays for instant connection.
+ * @fileOverview Hardened Agora Call Page.
+ * Prevents crashes during init and implements a 40s answer timeout.
  */
 
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -36,17 +37,19 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const [remoteUser, setRemoteUser] = useState<any>(null)
   const [partnerProfile, setPartnerProfile] = useState<any>(null)
   const [duration, setDuration] = useState(0)
+  const [isRinging, setIsRinging] = useState(true)
 
   const localVideoRef = useRef<HTMLDivElement>(null)
   const remoteVideoRef = useRef<HTMLDivElement>(null)
   const billingTimer = useRef<NodeJS.Timeout | null>(null)
+  const ringTimeout = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     if (!partnerId) return
     supabase.from('users').select('uid, name, photo_url').eq('uid', partnerId).single().then(({ data }) => setPartnerProfile(data))
   }, [partnerId])
 
-  // REALTIME SIGNALING
+  // REALTIME SIGNALING: Listen for "ended" status from the partner
   useEffect(() => {
     if (!callId) return
     const channel = supabase.channel(`call-sig-${callId}`)
@@ -59,12 +62,25 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return () => { supabase.removeChannel(channel) }
   }, [callId])
 
-  // BILLING TIMER
+  // 40 SECOND RINGING TIMEOUT
   useEffect(() => {
-    if (joined && user?.id && partnerId) {
+    if (joined && isRinging) {
+      ringTimeout.current = setTimeout(() => {
+        if (!remoteUser) {
+          handleEndCall(true) // Auto-end if not accepted in 40s
+        }
+      }, 40000)
+    }
+    return () => { if (ringTimeout.current) clearTimeout(ringTimeout.current) }
+  }, [joined, isRinging, remoteUser])
+
+  // BILLING TIMER: Only starts when the remote user joins
+  useEffect(() => {
+    if (joined && remoteUser && user?.id && partnerId) {
       billingTimer.current = setInterval(async () => {
         setDuration(prev => {
           const next = prev + 1
+          // 11th second is the first deduction point (after 10s free)
           const isFirstMinuteDeduction = next === 11;
           const isSubsequentMinuteDeduction = next > 11 && (next - 11) % 60 === 0;
 
@@ -78,7 +94,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
       }, 1000)
     }
     return () => { if (billingTimer.current) clearInterval(billingTimer.current) }
-  }, [joined, user?.id, partnerId, type])
+  }, [joined, remoteUser, user?.id, partnerId, type])
 
   useEffect(() => {
     let mounted = true;
@@ -98,9 +114,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         
         if (type === 'video') {
           videoTrack = await AgoraRTC.createCameraVideoTrack()
-          if (localVideoRef.current && videoTrack) {
-            videoTrack.play(localVideoRef.current)
-          }
         }
 
         if (!mounted) {
@@ -112,6 +125,10 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
         await client.publish(videoTrack ? [audioTrack, videoTrack] : [audioTrack])
         
+        if (localVideoRef.current && videoTrack) {
+          videoTrack.play(localVideoRef.current)
+        }
+
         rtc.current = { client, localAudioTrack: audioTrack, localVideoTrack: videoTrack }
         setJoined(true)
 
@@ -119,12 +136,15 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           await client.subscribe(remoteUser, mediaType)
           if (mediaType === "video") {
             setRemoteUser(remoteUser)
+            setIsRinging(false)
             setTimeout(() => {
               if (remoteVideoRef.current) remoteUser.videoTrack?.play(remoteVideoRef.current)
             }, 100)
           }
           if (mediaType === "audio") {
             remoteUser.audioTrack?.play()
+            setIsRinging(false)
+            setRemoteUser(prev => prev || remoteUser)
           }
         })
 
@@ -188,19 +208,25 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           <div ref={remoteVideoRef} className="w-full h-full" />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900">
-             <Avatar className="w-32 h-32 border-4 border-white/10 shadow-2xl">
-               <AvatarImage src={partnerProfile?.photo_url} className="object-cover" />
-               <AvatarFallback className="bg-zinc-800 text-zinc-500"><User className="w-16 h-16" /></AvatarFallback>
-             </Avatar>
+             <div className="relative">
+               {isRinging && <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20" />}
+               <Avatar className="w-32 h-32 border-4 border-white/10 shadow-2xl relative z-10">
+                 <AvatarImage src={partnerProfile?.photo_url} className="object-cover" />
+                 <AvatarFallback className="bg-zinc-800 text-zinc-500"><User className="w-16 h-16" /></AvatarFallback>
+               </Avatar>
+             </div>
              <h2 className="text-white text-2xl font-black mt-6 tracking-tight">{partnerProfile?.name || 'Connecting...'}</h2>
-             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-2">
-               {joined ? formatDuration(duration) : 'Initializing...'}
-             </p>
-             {duration < 11 && joined && (
-               <div className="mt-4 px-4 py-1.5 bg-green-500/20 text-green-400 rounded-full border border-green-500/30 animate-pulse">
-                 <p className="text-[10px] font-black uppercase tracking-widest">Free Preview: {10 - duration}s</p>
-               </div>
-             )}
+             
+             <div className="flex flex-col items-center gap-2 mt-4">
+                <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em]">
+                  {joined ? (remoteUser ? formatDuration(duration) : 'Ringing...') : 'Initializing...'}
+                </p>
+                {remoteUser && duration < 11 && (
+                  <div className="px-4 py-1.5 bg-green-500/20 text-green-400 rounded-full border border-green-500/30 animate-pulse">
+                    <p className="text-[10px] font-black uppercase tracking-widest">Free Preview: {10 - duration}s</p>
+                  </div>
+                )}
+             </div>
           </div>
         )}
       </div>
