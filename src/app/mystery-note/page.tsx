@@ -1,8 +1,7 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "navigation"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
