@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
@@ -160,7 +161,15 @@ export default function HomePage() {
     fetchUsers(0, true);
   };
 
-  if (!statusChecked) return <div className="fixed inset-0 bg-white flex items-center justify-center"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
+  if (!statusChecked) {
+    return (
+      <div className="fixed inset-0 bg-white flex items-center justify-center animate-in fade-in duration-500">
+         <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight">
+           QIVO
+         </h1>
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">

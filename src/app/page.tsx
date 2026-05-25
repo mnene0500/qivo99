@@ -7,9 +7,8 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 
 /**
- * Root Redirector.
- * Hardened logic gate to ensure zero-latency routing to the correct entry point.
- * Verifies onboarding status BEFORE allowing access to home.
+ * Root Redirector / Splash Screen.
+ * Displays the cinematic QIVO brand while verifying authentication and onboarding status.
  */
 export default function RootPage() {
   const router = useRouter()
@@ -52,8 +51,10 @@ export default function RootPage() {
   }, [user, isInitialized, authLoading, router])
 
   return (
-    <div className="fixed inset-0 bg-white flex items-center justify-center">
-       <div className="w-8 h-8 border-4 border-[#00A2FF]/20 border-t-[#00A2FF] rounded-full animate-spin" />
+    <div className="fixed inset-0 bg-white flex items-center justify-center select-none animate-in fade-in duration-700">
+       <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight">
+         QIVO
+       </h1>
     </div>
   )
 }
