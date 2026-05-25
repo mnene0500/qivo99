@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
@@ -45,7 +44,9 @@ export default function HomePage() {
   const [profile, setProfile] = useState<any>(null)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
+  
   const isFetched = useRef(false)
+  const tabRef = useRef(activeTab)
 
   const fetchUsers = useCallback(async (pageNum = 0, isManual = false) => {
     if (!profile) return;
@@ -68,7 +69,7 @@ export default function HomePage() {
         .range(from, to);
 
       if (oppositeGender) query.eq('gender', oppositeGender);
-      if (activeTab === 'Nearby' && profile.country) query.eq('country', profile.country);
+      if (tabRef.current === 'Nearby' && profile.country) query.eq('country', profile.country);
 
       const { data } = await query;
       if (data) {
@@ -83,7 +84,7 @@ export default function HomePage() {
       setIsRefreshing(false);
       setInitialLoading(false);
     }
-  }, [currentUser?.id, profile, activeTab]);
+  }, [currentUser?.id, profile]);
 
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
@@ -105,12 +106,13 @@ export default function HomePage() {
     }
   }, [profile, fetchUsers]);
 
-  // Handle tab switching stabilization
-  useEffect(() => {
-    if (profile) {
-      fetchUsers(0);
-    }
-  }, [activeTab]);
+  const handleTabChange = (tab: 'Recommend' | 'Nearby') => {
+    if (activeTab === tab) return
+    setActiveTab(tab)
+    tabRef.current = tab
+    setPage(0)
+    fetchUsers(0)
+  }
 
   if (authLoading || !isInitialized) return (
     <div className="fixed inset-0 bg-white flex items-center justify-center select-none z-[9999]">
@@ -135,7 +137,11 @@ export default function HomePage() {
         <div className="sticky top-0 z-50 bg-[#00A2FF] px-6 py-4 flex items-center justify-between border-t border-white/10">
           <div className="flex items-center gap-8">
             {(['Recommend', 'Nearby'] as const).map((tab) => (
-              <button key={tab} onClick={() => { setActiveTab(tab); setPage(0); }} className={cn("text-sm font-black transition-all relative pb-2", activeTab === tab ? "text-white" : "text-white/40")}>
+              <button 
+                key={tab} 
+                onClick={() => handleTabChange(tab)} 
+                className={cn("text-sm font-black transition-all relative pb-2", activeTab === tab ? "text-white" : "text-white/40")}
+              >
                 {tab}
                 {activeTab === tab && <div className="absolute -bottom-1 left-0 right-0 h-1 bg-white rounded-full animate-in zoom-in" />}
               </button>

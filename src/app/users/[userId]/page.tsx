@@ -4,7 +4,7 @@ import { use, useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, MessageSquare, MoreHorizontal, BadgeCheck, Ban, Flag, MapPin, Quote, Globe, GraduationCap, Heart, Loader2 } from "lucide-react"
+import { ChevronLeft, MessageSquare, MoreHorizontal, BadgeCheck, Ban, Flag, MapPin, Quote, Globe, GraduationCap, Heart, Loader2, Copy, Check } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -19,6 +19,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
 
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [idCopied, setIdCopied] = useState(false)
 
   useEffect(() => {
     supabase.from('users').select('*').eq('uid', userId).single().then(({ data }) => {
@@ -26,6 +27,14 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
       setLoading(false)
     })
   }, [userId])
+
+  const handleCopyId = () => {
+    if (!profile?.match_flow_id) return
+    navigator.clipboard.writeText(profile.match_flow_id)
+    setIdCopied(true)
+    toast({ title: "ID Copied" })
+    setTimeout(() => setIdCopied(false), 2000)
+  }
 
   const calculateAge = (dob: string) => {
     if (!dob) return "21"
@@ -83,7 +92,13 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="bg-black text-white px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-md flex items-center gap-2"><span>{profile.gender === 'female' ? '♀' : '♂'}</span><span>{age} Years</span></div>
-            <button className="bg-gray-50 text-gray-400 px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border border-gray-100 active:scale-95 transition-all">ID: {profile.match_flow_id}</button>
+            <button 
+              onClick={handleCopyId}
+              className="bg-gray-50 text-gray-400 px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border border-gray-100 active:scale-95 transition-all flex items-center gap-1.5"
+            >
+              ID: {profile.match_flow_id}
+              {idCopied ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5" />}
+            </button>
           </div>
         </div>
 
