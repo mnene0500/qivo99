@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { RotateCw, BadgeCheck, Loader2, FileText, Target, MessageSquare, LogOut } from "lucide-react"
+import { RotateCw, BadgeCheck, Loader2, FileText, Target, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
@@ -83,15 +83,6 @@ export default function HomePage() {
     }
   }, [currentUser?.id, profile, activeTab]);
 
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut()
-      window.location.replace("/welcome")
-    } catch (error) {
-      console.error(error)
-    }
-  }
-
   useEffect(() => {
     if (isInitialized && currentUser) {
       supabase.from('users').select('uid, gender, country, onboarding_complete').eq('uid', currentUser.id).single()
@@ -109,7 +100,13 @@ export default function HomePage() {
     if (profile) fetchUsers(0);
   }, [profile, activeTab, fetchUsers]);
 
-  if (authLoading || !isInitialized) return null;
+  if (authLoading || !isInitialized) return (
+    <div className="fixed inset-0 bg-white flex items-center justify-center select-none z-[9999]">
+       <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse">
+         QIVO
+       </h1>
+    </div>
+  );
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none">
@@ -132,14 +129,9 @@ export default function HomePage() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white active:scale-90 transition-transform", isRefreshing && "animate-spin")}>
-              <RotateCw className="w-4 h-4" />
-            </button>
-            <button onClick={handleSignOut} className="p-2 text-white active:scale-90 transition-opacity">
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+          <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white active:scale-90 transition-transform", isRefreshing && "animate-spin")}>
+            <RotateCw className="w-4 h-4" />
+          </button>
         </div>
       </div>
 

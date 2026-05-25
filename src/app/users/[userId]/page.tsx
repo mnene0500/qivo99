@@ -1,4 +1,3 @@
-
 "use client"
 
 import { use, useState, useEffect } from "react"
@@ -37,7 +36,13 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
     return age;
   }
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
+  if (loading) return (
+    <div className="fixed inset-0 bg-white flex items-center justify-center select-none z-[9999]">
+       <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse">
+         QIVO
+       </h1>
+    </div>
+  );
   if (!profile) return <div className="min-h-screen flex items-center justify-center p-8">Profile not found.</div>
 
   const age = calculateAge(profile.dob)
@@ -49,7 +54,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
         <Image src={profile.photo_url} alt={profile.name} fill className="object-cover" priority sizes="100vw" />
         <div className="absolute top-12 inset-x-0 px-6 flex justify-between items-center z-20">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full bg-white/10 backdrop-blur-xl text-white w-10 h-10 border border-white/20 shadow-2xl active:scale-90 transition-all"><ChevronLeft className="w-6 h-6" /></Button>
-          {!profile.is_admin && (
+          {!profile.is_owner && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-full bg-white/10 backdrop-blur-xl text-white w-10 h-10 border border-white/20 shadow-2xl active:scale-90 transition-all"><MoreHorizontal className="w-6 h-6" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="rounded-2xl min-w-[180px] p-2 border-none shadow-2xl">

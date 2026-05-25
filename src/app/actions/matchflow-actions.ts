@@ -1,11 +1,9 @@
-
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 
 /**
- * @fileOverview Hardened, Atomic Server Actions.
- * Optimized for guaranteed rewards and safe database purging.
+ * @fileOverview Hardened, Atomic Server Actions for Owner hierarchy.
  */
 
 export async function completeOnboardingAction(payload: {
@@ -74,7 +72,8 @@ export async function deleteUserCompletelyAction(uid: string) {
       supabase.from('coin_history').delete().eq('user_id', uid),
       supabase.from('diamond_history').delete().eq('user_id', uid),
       supabase.from('withdrawals').delete().eq('user_id', uid),
-      supabase.from('messages').delete().eq('sender_id', uid)
+      supabase.from('messages').delete().eq('sender_id', uid),
+      supabase.from('users').update({ blocking: '{}', blocked_by: '{}' }).eq('uid', uid)
     ]);
 
     // 2. Unlink from chats
@@ -99,16 +98,17 @@ export async function deleteUserCompletelyAction(uid: string) {
   }
 }
 
-export async function awardCoinsAction(adminUid: string, targetUid: string, amount: number) {
+export async function awardCoinsAction(ownerUid: string, targetUid: string, amount: number) {
   const supabase = getSupabaseAdmin();
   try {
-    const { data: admin } = await supabase.from('users').select('is_admin, is_coin_seller').eq('uid', adminUid).single();
-    if (!admin?.is_admin && !admin?.is_coin_seller) throw new Error("Unauthorized");
+    const { data: owner } = await supabase.from('users').select('is_owner, is_coin_seller').eq('uid', ownerUid).single();
+    if (!owner?.is_owner && !owner?.is_coin_seller) throw new Error("Unauthorized");
 
-    if (!admin.is_admin) {
-      const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', adminUid).single();
+    // Only non-owners need to have the balance to deduct
+    if (!owner.is_owner) {
+      const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', ownerUid).single();
       if ((bal?.coins || 0) < amount) throw new Error("Insufficient merchant balance");
-      await supabase.rpc("increment_coins", { p_user_id: adminUid, p_amount: -amount });
+      await supabase.rpc("increment_coins", { p_user_id: ownerUid, p_amount: -amount });
     }
 
     const { error: awardErr } = await supabase.rpc("increment_coins", { p_user_id: targetUid, p_amount: amount });
@@ -118,11 +118,26 @@ export async function awardCoinsAction(adminUid: string, targetUid: string, amou
       user_id: targetUid,
       amount: amount,
       type: 'purchase',
-      description: 'Transfer from Merchant',
+      description: owner.is_owner ? 'Transfer from Owner' : 'Transfer from Merchant',
       timestamp: Date.now()
     });
 
     return { success: true, message: `Successfully sent ${amount} coins.` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function toggleUserRoleAction(ownerUid: string, targetMatchFlowId: string, role: 'is_coin_seller' | 'is_agent' | 'is_owner', value: boolean) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const { data: owner } = await supabase.from('users').select('is_owner').eq('uid', ownerUid).single();
+    if (!owner?.is_owner) throw new Error("Unauthorized");
+
+    const { error } = await supabase.from('users').update({ [role]: value }).eq('match_flow_id', targetMatchFlowId);
+    if (error) throw error;
+
+    return { success: true, message: "Authority updated successfully." };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -179,11 +194,11 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
   const supabase = getSupabaseAdmin();
   const timestamp = Date.now();
   try {
-    const { data: sender } = await supabase.from('users').select('gender, is_admin, is_coin_seller').eq('uid', payload.senderId).single();
+    const { data: sender } = await supabase.from('users').select('gender, is_owner, is_coin_seller').eq('uid', payload.senderId).single();
     if (!sender) throw new Error("Sender not found.");
 
     const cost = 15;
-    if (sender.gender === 'male' && !sender.is_admin && !sender.is_coin_seller) {
+    if (sender.gender === 'male' && !sender.is_owner && !sender.is_coin_seller) {
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', payload.senderId).single();
       if ((Number(bal?.coins) || 0) < cost) return { success: false, error: "insufficient_funds" };
       await supabase.rpc("increment_coins", { p_user_id: payload.senderId, p_amount: -cost });
@@ -196,33 +211,6 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
     return { success: true };
   } catch (err: any) {
     return { success: false, error: "system_error" };
-  }
-}
-
-export async function toggleUserRoleAction(adminUid: string, targetMatchFlowId: string, role: 'is_coin_seller' | 'is_agent' | 'is_admin', value: boolean) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const { data: admin } = await supabase.from('users').select('is_admin').eq('uid', adminUid).single();
-    if (!admin?.is_admin) throw new Error("Unauthorized");
-
-    const { error } = await supabase.from('users').update({ [role]: value }).eq('match_flow_id', targetMatchFlowId);
-    if (error) throw error;
-
-    return { success: true, message: "Authority updated successfully." };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function submitReportAction(reporterId: string, reportedId: string, reason: string, description: string, proofUrl: string) {
-  const supabase = getSupabaseAdmin();
-  try {
-    await supabase.from('reports').insert({
-      reporter_id: reporterId, reported_id: reportedId, reason, description, proof_photo_url: proofUrl, status: 'pending', timestamp: Date.now()
-    });
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
   }
 }
 
@@ -348,7 +336,6 @@ export async function sendMysteryNoteAction(userId: string, message: string, rec
   try {
     const cost = recipients * 10;
     await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -cost });
-    // Logic for mystery note blast would go here
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };

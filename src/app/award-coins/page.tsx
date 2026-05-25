@@ -87,7 +87,7 @@ export default function AwardCoinsPage() {
       return;
     }
 
-    if (!profile?.is_admin && coins < numAmount) {
+    if (!profile?.is_owner && coins < numAmount) {
       toast({ variant: "destructive", title: "Insufficient Balance" });
       return;
     }
@@ -111,7 +111,7 @@ export default function AwardCoinsPage() {
     }
   }
 
-  const isAdmin = profile?.is_admin
+  const isOwner = profile?.is_owner
 
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
@@ -131,12 +131,12 @@ export default function AwardCoinsPage() {
           <div className="space-y-1">
             <h2 className="text-2xl font-black text-black tracking-tight">Transfer Coins</h2>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-              {isAdmin ? "Master Admin Terminal" : "Merchant Sales Portal"}
+              {isOwner ? "Owner Master Terminal" : "Merchant Sales Portal"}
             </p>
           </div>
         </div>
 
-        {!isAdmin && (
+        {!isOwner && (
           <div className="w-full max-w-sm p-6 bg-gray-50 rounded-3xl border border-black/5 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3">
               <div className="bg-white p-2 rounded-xl"><Wallet className="w-5 h-5 text-[#00A2FF]" /></div>

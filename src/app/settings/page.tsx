@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -71,7 +70,6 @@ export default function SettingsPage() {
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut()
-      // USE REPLACE TO CLEAR HISTORY STACK
       window.location.replace("/welcome")
     } catch (error) {
       console.error(error)
@@ -101,7 +99,6 @@ export default function SettingsPage() {
     try {
       const res = await deleteUserCompletelyAction(user.id);
       if (res.success) {
-        // Sign out locally and replace location to purge the session completely
         await supabase.auth.signOut();
         window.location.replace("/welcome");
         toast({ title: "Account Deleted", description: "All data and auth records have been removed." });
@@ -131,7 +128,7 @@ export default function SettingsPage() {
           <SettingItem label="About QIVO" href="/about" icon={<Info className="w-5 h-5 text-gray-500" />} />
           <SettingItem label="Clear Cache" onClick={handleClearCache} icon={<RefreshCw className="w-5 h-5 text-orange-500" />} />
 
-          {!loading && !profile?.is_admin && (
+          {!loading && !profile?.is_owner && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <div className="flex items-center justify-between py-5 px-6 border-b border-gray-50 active:bg-gray-50 transition-colors cursor-pointer bg-white animate-in fade-in duration-300">

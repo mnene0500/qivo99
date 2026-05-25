@@ -4,12 +4,12 @@ import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Loader2, Award, Briefcase, UserPlus, Wallet, Shield, PlusCircle, History, Trash2, LogOut } from "lucide-react"
+import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Loader2, Award, Briefcase, UserPlus, Wallet, Shield, PlusCircle, History } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { useUser } from "@/firebase/auth/use-user"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { createAgencyAction, joinAgencyAction, leaveAgencyAction } from "@/app/actions/matchflow-actions"
 import { useBalance } from "@/lib/providers/BalanceProvider"
@@ -33,7 +33,7 @@ export default function MePage() {
     if (!user?.id) return
     const { data } = await supabase
       .from('users')
-      .select('uid, name, photo_url, match_flow_id, is_verified, is_admin, is_coin_seller, is_agent, gender, agency_id, agency_status, updated_at')
+      .select('uid, name, photo_url, match_flow_id, is_verified, is_owner, is_coin_seller, is_agent, gender, agency_id, agency_status, updated_at')
       .eq('uid', user.id)
       .maybeSingle();
     if (data) setProfile(data)
@@ -92,10 +92,16 @@ export default function MePage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  if (!isReady && (authLoading || !profile)) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
+  if (!isReady && (authLoading || !profile)) return (
+    <div className="fixed inset-0 bg-white flex items-center justify-center select-none z-[9999]">
+       <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse">
+         QIVO
+       </h1>
+    </div>
+  );
 
-  const isAdmin = profile?.is_admin
-  const isMerchant = profile?.is_coin_seller || isAdmin
+  const isOwner = profile?.is_owner
+  const isMerchant = profile?.is_coin_seller || isOwner
   const isAgent = profile?.is_agent
   const isFemale = profile?.gender === 'female'
   const isAgencyMember = profile?.agency_status === 'approved'
@@ -230,9 +236,9 @@ export default function MePage() {
             </section>
           )}
 
-          {isAdmin && (
+          {isOwner && (
             <section className="space-y-3">
-              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Admin Console</h3>
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Owner Console</h3>
               <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
                 <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild><Link href="/manage-roles"><div className="flex items-center gap-4"><div className="bg-indigo-50 p-2.5 rounded-xl"><Shield className="w-5 h-5 text-indigo-600" /></div><span className="font-semibold text-xs text-black">Authority Manager</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link></Button>
                 <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild><Link href="/manage-reports"><div className="flex items-center gap-4"><div className="bg-red-50 p-2.5 rounded-xl"><Flag className="w-5 h-5 text-red-600" /></div><span className="font-semibold text-xs text-black">Report Queue</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link></Button>
