@@ -114,11 +114,20 @@ export async function completeOnboardingAction(payload: {
 export async function deleteUserCompletelyAction(uid: string) {
   const supabase = getSupabaseAdmin();
   try {
+    // 1. Delete chats this user was part of
     await supabase.from('chats').delete().contains('participant_ids', [uid]);
+    
+    // 2. Explicitly delete the profile from public.users
+    // This triggers ON DELETE CASCADE for balances, coin_history, diamond_history, etc.
+    await supabase.from('users').delete().eq('uid', uid);
+    
+    // 3. Delete the actual Auth account
     const { error } = await supabase.auth.admin.deleteUser(uid);
     if (error) throw error;
+    
     return { success: true };
   } catch (err: any) {
+    console.error("[Delete User Error]:", err.message);
     return { success: false, error: err.message };
   }
 }
@@ -293,6 +302,7 @@ export async function reviewRecruitmentAction(applicantUid: string, status: 'app
   const supabase = getSupabaseAdmin();
   try {
     if (status === 'rejected') {
+      // Clear agency ID and status completely so they can apply elsewhere
       await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('uid', applicantUid);
     } else {
       await supabase.from('users').update({ agency_status: status }).eq('uid', applicantUid);

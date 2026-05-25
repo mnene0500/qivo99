@@ -83,7 +83,8 @@ export default function AgencyManagePage() {
 
   const handleReview = async (applicantUid: string, status: 'approved' | 'rejected') => {
     if (!user) return
-    const res = await reviewRecruitmentAction(user.id, applicantUid, status)
+    // FIXED: Passed parameters incorrectly before
+    const res = await reviewRecruitmentAction(applicantUid, status)
     if (res.success) {
       toast({ title: status === 'approved' ? "Member Approved" : "Applicant Rejected" })
     }
@@ -92,7 +93,8 @@ export default function AgencyManagePage() {
   const handleWithdrawalReview = async (requestId: string, status: 'paid' | 'rejected') => {
     if (!user || !profile?.agency_id) return
     setIsProcessing(true)
-    const res = await updateWithdrawalStatusAction(user.id, profile.agency_id, requestId, status)
+    // FIXED: Passed parameters incorrectly before
+    const res = await updateWithdrawalStatusAction(requestId, status)
     if (res.success) {
       toast({ title: `Payout marked as ${status}` })
     }
