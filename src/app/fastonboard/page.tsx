@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useRef } from "react"
@@ -55,7 +54,6 @@ export default function FastOnboardingPage() {
   const handleComplete = async () => {
     if (!user) return
     
-    // Female users MUST upload a photo
     if (gender === 'female' && !showPhotoStep) {
       setShowPhotoStep(true)
       return
@@ -71,7 +69,6 @@ export default function FastOnboardingPage() {
     try {
       let finalPhotoUrl = uploadedPhoto;
       
-      // Upload photo if provided
       if (uploadedPhoto && uploadedPhoto.startsWith('data:image')) {
         const { blob } = base64ToBlob(uploadedPhoto);
         finalPhotoUrl = await uploadProfilePhoto(blob, user.id);

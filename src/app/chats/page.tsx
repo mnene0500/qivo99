@@ -73,7 +73,6 @@ function ChatsContent() {
   const [isGifting, setIsGifting] = useState(false)
   const [giftDialogOpen, setGiftDialogOpen] = useState(false)
 
-  // Long Press Logic for Deletion from List
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
   const isLongPress = useRef(false)
@@ -135,12 +134,10 @@ function ChatsContent() {
       const ids = [currentUser.id, startWithId].sort()
       const cId = `direct_${ids[0]}_${ids[1]}`
       setChatId(cId)
-      setMessages([]) // Important: Clear messages instantly to prevent blinking
+      setMessages([])
       
-      // Get partner profile
       supabase.from('users').select('uid, name, photo_url, is_verified, blocking, blocked_by').eq('uid', startWithId).maybeSingle().then(({ data }) => setPartnerProfile(data))
       
-      // Get cleared timestamp before loading messages
       supabase.from('chats').select('cleared_at').eq('id', cId).maybeSingle().then(({ data }) => {
         const cleared = (data?.cleared_at as Record<string, number>)?.[currentUser.id] || 0
         setActiveChatClearedAt(cleared)
@@ -155,7 +152,7 @@ function ChatsContent() {
         .from('messages')
         .select('id, text, sender_id, timestamp, is_gift')
         .eq('chat_id', chatId)
-        .gt('timestamp', activeChatClearedAt) // Only messages after clear time
+        .gt('timestamp', activeChatClearedAt)
         .order('timestamp', { ascending: false })
         .limit(40)
       if (data) setMessages(data)
@@ -193,7 +190,6 @@ function ChatsContent() {
     const targetId = id || chatId
     if (!currentUser || !targetId) return
 
-    // Optimistic UI: Remove from list immediately
     setChatSummaries(prev => prev.filter(s => s.id !== targetId))
     
     const res = await clearChatAction(currentUser.id, targetId)
@@ -204,26 +200,10 @@ function ChatsContent() {
         router.push("/chats") 
       }
     } else {
-      // Revert summaries if failed
       fetchSummaries()
     }
   }
 
-  const handleStartCall = async (type: 'video' | 'voice') => {
-    if (!currentUser || !startWithId || !chatId) return
-    const balanceCheck = await checkCallBalanceAction(currentUser.id, type)
-    if (!balanceCheck.success) { 
-      toast({ variant: "destructive", title: "Insufficient Coins" }); 
-      router.push("/recharge"); 
-      return; 
-    }
-    const res = await startCallAction(chatId, currentUser.id, startWithId, type)
-    if (res.success) { 
-      router.push(`/call/${chatId}?type=${type}&partnerId=${startWithId}&callId=${res.callId}`); 
-    }
-  }
-
-  // Long press handler functions
   const handleTouchStart = (id: string) => {
     isLongPress.current = false
     longPressTimer.current = setTimeout(() => {
@@ -248,12 +228,6 @@ function ChatsContent() {
       longPressTimer.current = null
     }
   }
-
-  // Bidirectional Block Logic
-  const isBidirectionalBlocked = partnerProfile && (
-    (partnerProfile.blocking || []).includes(currentUser?.id) || 
-    (partnerProfile.blocked_by || []).includes(currentUser?.id)
-  );
 
   if (authLoading || !isInitialized) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
 
@@ -294,7 +268,6 @@ function ChatsContent() {
         ))}
       </main>
 
-      {/* GLOBAL LONG PRESS DELETE DIALOG */}
       <AlertDialog open={!!deletingChatId} onOpenChange={(open) => !open && setDeletingChatId(null)}>
         <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none shadow-2xl">
           <AlertDialogHeader className="items-center text-center">
@@ -332,12 +305,6 @@ function ChatsContent() {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {!isBidirectionalBlocked && (
-            <>
-              <Button size="icon" variant="ghost" className="rounded-full text-[#00A2FF]" onClick={() => handleStartCall('voice')}><Phone className="w-5 h-5" /></Button>
-              <Button size="icon" variant="ghost" className="rounded-full text-[#00A2FF]" onClick={() => handleStartCall('video')}><Video className="w-5 h-5" /></Button>
-            </>
-          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="rounded-full text-gray-400"><MoreVertical className="w-5 h-5" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-2xl min-w-[160px]">

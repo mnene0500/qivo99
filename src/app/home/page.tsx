@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { RotateCw, BadgeCheck, Loader2, FileText, Target, MessageSquare } from "lucide-react"
+import { RotateCw, BadgeCheck, Loader2, FileText, Target, MessageSquare, LogOut } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
@@ -46,7 +46,6 @@ export default function HomePage() {
   const [hasMore, setHasMore] = useState(true)
 
   const fetchUsers = useCallback(async (pageNum = 0, isManual = false) => {
-    // If onboarding is incomplete, profile check might block. We only proceed if we have basic profile context.
     if (!profile) return;
     
     if (isManual) setIsRefreshing(true);
@@ -56,7 +55,6 @@ export default function HomePage() {
       const from = pageNum * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
       
-      // Determine preference based on profile gender if available, otherwise fetch both
       const oppositeGender = profile.gender === 'male' ? 'female' : profile.gender === 'female' ? 'male' : null;
 
       const query = supabase
@@ -70,7 +68,7 @@ export default function HomePage() {
       if (oppositeGender) query.eq('gender', oppositeGender);
       if (activeTab === 'Nearby' && profile.country) query.eq('country', profile.country);
 
-      const { data, error } = await query;
+      const { data } = await query;
       if (data) {
         const filtered = data.filter(u => u.uid !== currentUser?.id);
         if (pageNum === 0) setUsers(filtered);
@@ -85,6 +83,15 @@ export default function HomePage() {
     }
   }, [currentUser?.id, profile, activeTab]);
 
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut()
+      window.location.replace("/welcome")
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
   useEffect(() => {
     if (isInitialized && currentUser) {
       supabase.from('users').select('uid, gender, country, onboarding_complete').eq('uid', currentUser.id).single()
@@ -92,7 +99,6 @@ export default function HomePage() {
           if (data?.onboarding_complete) {
             setProfile(data);
           } else if (!data) {
-             // In case profile doesn't exist at all
              router.replace("/fastonboard");
           }
         });
@@ -103,7 +109,7 @@ export default function HomePage() {
     if (profile) fetchUsers(0);
   }, [profile, activeTab, fetchUsers]);
 
-  if (authLoading || !isInitialized) return null; // Let root layout handle splash
+  if (authLoading || !isInitialized) return null;
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none">
@@ -126,9 +132,14 @@ export default function HomePage() {
               </button>
             ))}
           </div>
-          <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white active:scale-90 transition-transform", isRefreshing && "animate-spin")}>
-            <RotateCw className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white active:scale-90 transition-transform", isRefreshing && "animate-spin")}>
+              <RotateCw className="w-4 h-4" />
+            </button>
+            <button onClick={handleSignOut} className="p-2 text-white active:scale-90 transition-opacity">
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 

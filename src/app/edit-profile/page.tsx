@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase, base64ToBlob, uploadProfilePhoto, uploadPostPhoto } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
@@ -42,8 +42,14 @@ export default function EditProfilePage() {
     const file = e.target.files?.[0]; if (!file) return
     const reader = new FileReader(); reader.onload = () => {
       const res = reader.result as string;
-      if (targetPhotoIndex === 'profile') { setTempImage(res); setCropOpen(true); }
-      else { const n = [...formData.additional_photos]; n.push(res); setFormData({ ...formData, additional_photos: n.slice(0, 4) }); }
+      if (targetPhotoIndex === 'profile') { 
+        setTempImage(res); 
+        setCropOpen(true); 
+      } else { 
+        const n = [...formData.additional_photos]; 
+        n.push(res); 
+        setFormData({ ...formData, additional_photos: n.slice(0, 4) }); 
+      }
     }; reader.readAsDataURL(file)
   }
 

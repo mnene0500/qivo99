@@ -19,7 +19,6 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
 
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     supabase.from('users').select('*').eq('uid', userId).single().then(({ data }) => {
