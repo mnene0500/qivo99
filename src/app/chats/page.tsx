@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, User, Gift, Trash2, MoreVertical, BadgeCheck, Loader2, Ban, Flag } from "lucide-react"
+import { Send, ChevronLeft, User, Gift, Trash2, MoreVertical, BadgeCheck, Loader2, Ban, Flag, PlusCircle, Coins } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
@@ -55,7 +55,6 @@ const GIFTS = [
   { name: "Galaxy", icon: "🌌", price: 50000 },
 ]
 
-// GLOBAL CACHE FOR INSTANT LOADING
 let cachedSummaries: ChatSummary[] = [];
 const SUMMARY_PAGE_SIZE = 15;
 const MESSAGE_PAGE_SIZE = 30;
@@ -69,7 +68,6 @@ function ChatsContent() {
   const startWithId = searchParams.get("startWith")
   const autoMsg = searchParams.get("autoMsg")
   
-  // Use cache immediately
   const [chatSummaries, setChatSummaries] = useState<ChatSummary[]>(cachedSummaries)
   const [loadingSummaries, setLoadingSummaries] = useState(false)
   const [summaryPage, setSummaryPage] = useState(0)
@@ -85,6 +83,7 @@ function ChatsContent() {
   
   const [isGifting, setIsGifting] = useState(false)
   const [giftDialogOpen, setGiftDialogOpen] = useState(false)
+  const [selectedGift, setSelectedGift] = useState<typeof GIFTS[0] | null>(null)
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
 
   const observerTarget = useRef<HTMLDivElement>(null)
@@ -95,7 +94,6 @@ function ChatsContent() {
   const fetchSummaries = useCallback(async (pageNum = 0) => {
     if (!currentUser?.id || loadingSummaries) return
     
-    // Only show loading indicator if cache is empty
     if (pageNum === 0 && chatSummaries.length === 0) setLoadingSummaries(true)
     
     const from = pageNum * SUMMARY_PAGE_SIZE;
@@ -154,7 +152,6 @@ function ChatsContent() {
         const filtered = enhanced.filter(s => !ids.has(s.id));
         return [...prev, ...filtered];
       });
-      // Append to global cache
       cachedSummaries = [...cachedSummaries, ...enhanced.filter(s => !new Set(cachedSummaries.map(x => x.id)).has(s.id))];
     }
     
@@ -165,9 +162,7 @@ function ChatsContent() {
 
   useEffect(() => {
     if (currentUser?.id && !startWithId) {
-      // Always refresh in background
       fetchSummaries(0)
-      
       const channel = supabase.channel('chats_realtime_summaries')
         .on('postgres_changes', { event: '*', table: 'chats' }, () => fetchSummaries(0))
         .subscribe()
@@ -282,7 +277,7 @@ function ChatsContent() {
     const res = await sendMessageAction({ chatId, senderId: currentUser.id, recipientId: startWithId, text });
     if (!res.success) {
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
-      toast({ variant: "destructive", title: res.error === 'insufficient_funds' ? "Insufficient coins" : "Error" })
+      toast({ variant: "destructive", title: res.error === 'insufficient_funds' ? "Insufficient Coins" : "Error" })
     }
   }, [chatId, currentUser?.id, newMessage, startWithId, toast]);
 
@@ -292,12 +287,12 @@ function ChatsContent() {
     const { data: userPrf } = await supabase.from('users').select('is_owner, is_special_user').eq('uid', currentUser.id).single();
     const isFree = userPrf?.is_owner || userPrf?.is_special_user;
     if (!isFree && (Number(bal?.coins) || 0) < gift.price) {
-      toast({ variant: "destructive", title: "Insufficient coins" });
-      setGiftDialogOpen(false);
+      toast({ variant: "destructive", title: "Insufficient Coins" });
       return;
     }
     setIsGifting(true);
     setGiftDialogOpen(false);
+    setSelectedGift(null);
     const ts = Date.now();
     const optimistic: Message = { id: `gift-${ts}`, text: `[Gift: ${gift.name}]`, sender_id: currentUser.id, timestamp: ts, is_gift: true, is_optimistic: true };
     setMessages(prev => [optimistic, ...prev]);
@@ -364,8 +359,8 @@ function ChatsContent() {
       </main>
 
       <AlertDialog open={!!deletingChatId} onOpenChange={(open) => !open && setDeletingChatId(null)}>
-        <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none shadow-2xl">
-          <AlertDialogHeader className="items-center text-center"><AlertDialogTitle className="text-xl font-bold">Delete conversation?</AlertDialogTitle><AlertDialogDescription className="text-[10px] uppercase font-bold tracking-widest text-gray-400">History will be cleared.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogContent className="rounded-2xl max-w-[85vw] p-8 border-none shadow-2xl">
+          <AlertDialogHeader className="items-center text-center"><AlertDialogTitle className="text-xl font-bold">Delete Conversation?</AlertDialogTitle><AlertDialogDescription className="text-[10px] uppercase font-bold tracking-widest text-gray-400">History will be cleared.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter className="flex flex-row items-center justify-center gap-4 mt-6">
             <AlertDialogCancel className="flex-1 h-14 rounded-full bg-gray-50 text-[10px] font-black uppercase">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => { if (deletingChatId) clearChatAction(currentUser!.id, deletingChatId); setDeletingChatId(null); fetchSummaries(0); }} className="flex-1 h-14 rounded-full bg-red-500 text-white text-[10px] font-black uppercase">Delete</AlertDialogAction>
@@ -404,9 +399,9 @@ function ChatsContent() {
           const isMe = m.sender_id === currentUser?.id;
           const gift = m.is_gift ? GIFTS.find(g => m.text.includes(g.name)) : null;
           return (
-            <div key={m.id} className={cn("max-w-[85%] p-4 rounded-3xl text-sm font-medium shadow-sm relative animate-in fade-in slide-in-from-bottom-2", 
+            <div key={m.id} className={cn("max-w-[85%] p-4 rounded-2xl text-sm font-medium shadow-sm relative animate-in fade-in slide-in-from-bottom-2", 
               isMe ? "bg-[#00A2FF] text-white self-end rounded-br-none" : "bg-white text-black self-start rounded-bl-none border",
-              m.is_gift && "bg-gradient-to-br from-pink-500 to-rose-600 text-white border-none p-6 flex flex-col items-center text-center gap-3"
+              m.is_gift && "bg-gradient-to-br from-pink-500 to-rose-600 text-white border-none p-6 flex flex-col items-center text-center gap-3 shadow-lg"
             )}>
               {m.is_gift ? (<><div className="text-5xl">{gift?.icon || "🎁"}</div><p className="font-black uppercase tracking-widest text-[10px]">{gift?.name || "Premium Gift"}</p>{isMe && <Button size="sm" onClick={() => handleSendGift(gift!)} className="mt-2 h-8 rounded-full bg-white/20 text-white text-[9px] uppercase font-black">Send Again</Button>}</>) : m.text}
             </div>
@@ -417,28 +412,69 @@ function ChatsContent() {
         </div>
       </main>
 
-      {/* REFINED TYPING AREA */}
       <footer className="p-4 border-t bg-white pb-[env(safe-area-inset-bottom, 16px)] shrink-0 z-[50]">
         <div className="flex items-center gap-3 max-w-5xl mx-auto w-full">
-          <Dialog open={giftDialogOpen} onOpenChange={setGiftDialogOpen}>
+          <Dialog open={giftDialogOpen} onOpenChange={(open) => { setGiftDialogOpen(open); if(!open) setSelectedGift(null); }}>
             <DialogTrigger asChild>
               <Button size="icon" variant="ghost" className="rounded-full h-12 w-12 bg-pink-50 text-pink-500 shrink-0 shadow-sm border border-pink-100 active:scale-90 transition-transform">
                 <Gift className="w-6 h-6 fill-current" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="rounded-t-[3rem] p-0 max-w-full sm:max-w-md fixed bottom-0 top-auto translate-y-0 border-none shadow-2xl animate-in slide-in-from-bottom duration-300">
-              <DialogHeader className="p-8 pb-2"><DialogTitle className="text-xl font-black uppercase tracking-tight">Gifts ({coins} Coins)</DialogTitle></DialogHeader>
-              <div className="grid grid-cols-4 gap-3 p-6 pt-4 max-h-[60vh] overflow-y-auto no-scrollbar pb-12">
+            <DialogContent className="rounded-t-2xl p-0 max-w-full sm:max-w-md fixed bottom-0 top-auto translate-y-0 border-none shadow-2xl bg-black text-white animate-in slide-in-from-bottom duration-300">
+              <DialogHeader className="p-6 pb-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <DialogTitle className="text-lg font-black uppercase tracking-tight text-white">Gifts</DialogTitle>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <Coins className="w-3.5 h-3.5 text-yellow-400 fill-current" />
+                      <span className="text-xs font-bold text-gray-300">{coins} Coins</span>
+                    </div>
+                  </div>
+                  <Button variant="ghost" onClick={() => router.push('/recharge')} className="h-9 rounded-full bg-white/10 hover:bg-white/20 text-yellow-400 border border-white/10 px-4 text-[10px] font-black uppercase tracking-widest">
+                    Recharge
+                  </Button>
+                </div>
+              </DialogHeader>
+              
+              <div className="grid grid-cols-4 gap-2 p-6 pt-4 max-h-[50vh] overflow-y-auto no-scrollbar">
                 {GIFTS.map((gift) => (
-                  <button key={gift.name} onClick={() => handleSendGift(gift)} disabled={isGifting} className="flex flex-col items-center p-3 bg-gray-50 rounded-2xl active:scale-95 transition-all border border-transparent hover:border-pink-200">
-                    <span className="text-3xl">{gift.icon}</span><span className="text-[10px] font-black uppercase mt-1 truncate w-full text-center">{gift.name}</span><span className="text-[9px] font-bold text-[#00A2FF]">{gift.price}</span>
+                  <button 
+                    key={gift.name} 
+                    onClick={() => setSelectedGift(gift)}
+                    className={cn(
+                      "flex flex-col items-center p-3 rounded-xl active:scale-95 transition-all border-2",
+                      selectedGift?.name === gift.name 
+                        ? "bg-pink-500/20 border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.3)]" 
+                        : "bg-white/5 border-transparent hover:bg-white/10"
+                    )}
+                  >
+                    <span className="text-3xl">{gift.icon}</span>
+                    <span className="text-[9px] font-black uppercase mt-1 truncate w-full text-center">{gift.name}</span>
+                    <span className="text-[8px] font-bold text-yellow-400 mt-0.5">{gift.price}</span>
                   </button>
                 ))}
+              </div>
+
+              <div className="p-6 bg-white/5 border-t border-white/10 flex gap-3">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setGiftDialogOpen(false)}
+                  className="flex-1 h-12 rounded-xl text-gray-400 font-black uppercase tracking-widest text-[10px]"
+                >
+                  Close
+                </Button>
+                <Button 
+                  disabled={!selectedGift || isGifting}
+                  onClick={() => selectedGift && handleSendGift(selectedGift)}
+                  className="flex-[2] h-12 rounded-xl bg-pink-500 hover:bg-pink-600 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-pink-500/20"
+                >
+                  {isGifting ? <Loader2 className="w-4 h-4 animate-spin" /> : `Send ${selectedGift ? `(${selectedGift.price} Coins)` : ""}`}
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
           
-          <div className="flex-1 flex items-center bg-gray-50 rounded-[1.8rem] px-4 min-h-[48px] border border-black/5 focus-within:ring-2 focus-within:ring-[#00A2FF]/20 focus-within:bg-white transition-all min-w-0">
+          <div className="flex-1 flex items-center bg-gray-50 rounded-2xl px-4 min-h-[48px] border border-black/5 focus-within:ring-2 focus-within:ring-[#00A2FF]/20 focus-within:bg-white transition-all min-w-0">
             <input 
               value={newMessage} 
               onChange={e => setNewMessage(e.target.value)} 

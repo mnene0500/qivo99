@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -5,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, X, Coins, Trophy, CheckCircle2, Loader2 } from "lucide-react"
+import { ChevronLeft, Coins, Trophy, CheckCircle2, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { dailyCheckInAction } from "@/app/actions/matchflow-actions"
@@ -81,14 +82,11 @@ export default function TaskCenterPage() {
   return (
     <div className="flex-1 bg-[#F8F9FA] min-h-screen pb-10 select-none animate-in fade-in duration-300">
       <header className="bg-blue-900 h-32 relative px-4 pt-12">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-white rounded-full hover:bg-white/10">
             <ChevronLeft className="w-6 h-6" />
           </Button>
-          <h1 className="text-xl font-bold text-white tracking-tight">Task Center</h1>
-          <Button variant="ghost" size="icon" onClick={() => router.push('/home')} className="text-white rounded-full hover:bg-white/20">
-            <X className="w-6 h-6" />
-          </Button>
+          <h1 className="text-xl font-bold text-white tracking-tight ml-2">Task Center</h1>
         </div>
       </header>
 
@@ -96,7 +94,7 @@ export default function TaskCenterPage() {
         {loading ? (
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
         ) : (
-          <section className="bg-white p-6 rounded-[2rem] shadow-xl border border-black/5">
+          <section className="bg-white p-6 rounded-2xl shadow-xl border border-black/5">
             <div className="flex items-center justify-between mb-6 px-1">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-yellow-50 rounded-lg flex items-center justify-center">
@@ -121,7 +119,7 @@ export default function TaskCenterPage() {
                   <div 
                     key={i} 
                     className={cn(
-                      "aspect-square rounded-2xl flex flex-col items-center justify-center border-2 transition-all duration-500", 
+                      "aspect-square rounded-xl flex flex-col items-center justify-center border-2 transition-all duration-500", 
                       isCollected ? "bg-green-50 border-green-200" : "bg-gray-50 border-transparent shadow-inner"
                     )}
                   >
@@ -152,11 +150,11 @@ export default function TaskCenterPage() {
           </section>
         )}
 
-        <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-black/5 space-y-4">
+        <section className="bg-white p-6 rounded-2xl shadow-sm border border-black/5 space-y-4">
           <h2 className="text-[10px] font-black tracking-widest text-gray-400 ml-1">Identity Bonus</h2>
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-black/5">
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-black/5">
              <div className="flex items-center gap-3">
-               <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500 shadow-sm"><Trophy className="w-5 h-5" /></div>
+               <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-blue-500 shadow-sm"><Trophy className="w-5 h-5" /></div>
                <div><p className="text-xs font-black tracking-tight">Trust Badge</p><p className="text-[9px] text-gray-400 font-medium">Verify your face for extra trust</p></div>
              </div>
              <Button size="sm" onClick={() => router.push('/verify-identity')} className="rounded-full bg-blue-900 text-[9px] font-black h-8 shadow-lg shadow-blue-100 px-4">Go</Button>
