@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Paperclip, SendHorizontal, Image as ImageIcon, Smile, Mic } from "lucide-react";
+import { Paperclip, SendHorizontal, Image as ImageIcon, Smile, Mic, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,10 @@ interface MessageInputProps {
   initialValue?: string;
 }
 
+/**
+ * @fileOverview Overhauled Message Input for Conversation Screen.
+ * Fixed: Spacious typing area, full-width design, and responsive action buttons.
+ */
 export function MessageInput({ onSendMessage, className, initialValue }: MessageInputProps) {
   const [content, setContent] = useState(initialValue || "");
   const [isDragging, setIsDragging] = useState(false);
@@ -32,83 +36,43 @@ export function MessageInput({ onSendMessage, className, initialValue }: Message
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    // Simulate file drop
-    onSendMessage("Shared a high-resolution workflow capture.", "https://picsum.photos/seed/drop/800/600");
-  };
-
   return (
-    <div className={cn("p-4 border-t border-border bg-background/50 backdrop-blur-md", className)}>
-      <div 
-        className={cn(
-          "max-w-4xl mx-auto relative group rounded-2xl border transition-all duration-300",
-          isDragging ? "border-primary bg-primary/5 scale-[1.01]" : "border-border bg-sidebar-accent/30 hover:border-border-foreground/20",
-          "liquid-elastic-transition"
-        )}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <div className="flex items-end gap-2 p-2 min-h-[56px]">
-          <div className="flex items-center gap-1 mb-1">
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground hover:text-primary transition-colors">
-              <Paperclip className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground hover:text-secondary transition-colors" onClick={() => fileInputRef.current?.click()}>
-              <ImageIcon className="w-5 h-5" />
-            </Button>
-            <input type="file" ref={fileInputRef} className="hidden" />
-          </div>
-
+    <div className={cn("p-4 border-t border-gray-100 bg-white/90 backdrop-blur-xl shrink-0 pb-[env(safe-area-inset-bottom,16px)]", className)}>
+      <div className="flex items-end gap-3 max-w-5xl mx-auto">
+        <div className="flex-1 flex items-center bg-gray-50 rounded-[1.5rem] px-4 min-h-[52px] border border-black/5 focus-within:ring-2 focus-within:ring-blue-500/10 focus-within:bg-white transition-all">
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-colors"
+          >
+            <Paperclip className="w-5 h-5" />
+          </button>
+          
           <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={isDragging ? "Drop to upload..." : "Type your message or flow..."}
-            className="flex-1 min-h-[40px] max-h-[200px] bg-transparent border-none focus-visible:ring-0 resize-none py-3 px-0 text-[15px]"
+            placeholder="Type your message..."
+            className="flex-1 min-h-[40px] max-h-[120px] bg-transparent border-none focus-visible:ring-0 resize-none py-3 px-2 text-[15px] font-medium"
           />
-
-          <div className="flex items-center gap-1 mb-1">
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground">
-              <Smile className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground">
-              <Mic className="w-5 h-5" />
-            </Button>
-            <Button 
-              size="icon" 
-              className="h-9 w-9 rounded-full bg-primary text-primary-foreground hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20"
-              onClick={handleSend}
-              disabled={!content.trim()}
-            >
-              <SendHorizontal className="w-5 h-5" />
-            </Button>
-          </div>
+          
+          <button className="w-10 h-10 flex items-center justify-center text-gray-400">
+            <Smile className="w-5 h-5" />
+          </button>
         </div>
-        
-        {isDragging && (
-          <div className="absolute inset-0 flex items-center justify-center bg-primary/10 rounded-2xl pointer-events-none z-10 border-2 border-dashed border-primary">
-            <div className="text-primary font-headline font-bold flex flex-col items-center gap-2">
-              <ImageIcon className="w-8 h-8 animate-bounce" />
-              Multimedia Flux: Release to Upload
-            </div>
-          </div>
-        )}
+
+        <Button 
+          onClick={handleSend}
+          disabled={!content.trim()}
+          size="icon"
+          className={cn(
+            "w-[52px] h-[52px] rounded-full shrink-0 shadow-lg active:scale-90 transition-all",
+            content.trim() ? "bg-[#00A2FF] text-white shadow-blue-200" : "bg-gray-100 text-gray-400 shadow-none"
+          )}
+        >
+          <Send className="w-6 h-6" />
+        </Button>
       </div>
-      <p className="text-[10px] text-center text-muted-foreground/60 mt-3 font-medium uppercase tracking-[0.2em]">
-        Press Enter to Send • Shift + Enter for New Line
-      </p>
+      <input type="file" ref={fileInputRef} className="hidden" />
     </div>
   );
 }

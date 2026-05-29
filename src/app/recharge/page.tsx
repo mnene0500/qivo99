@@ -4,13 +4,33 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Coins, ShieldCheck, Loader2, MessageSquare, ExternalLink, Zap, Check, History, AlertCircle, Info } from "lucide-react"
+import { 
+  ChevronLeft, 
+  Coins, 
+  ShieldCheck, 
+  Loader2, 
+  MessageSquare, 
+  ExternalLink, 
+  Zap, 
+  Check, 
+  History, 
+  Info, 
+  Globe, 
+  ChevronDown 
+} from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { useToast } from "@/hooks/use-toast"
 import { initiatePesaPalPayment } from "@/app/actions/payment-actions"
 import { cn } from "@/lib/utils"
 import { useBalance } from "@/lib/providers/BalanceProvider"
 import { supabase } from "@/lib/supabase"
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog"
 
 const PACKAGES = [
   { id: "p1", label: "10", coins: 10, priceKes: 1 },
@@ -21,12 +41,21 @@ const PACKAGES = [
   { id: "p6", label: "5K", coins: 5000, priceKes: 600 },
 ]
 
-// Conversion Rates (Approximate for Prototype)
 const RATES = {
   'Kenya': { code: 'KES', rate: 1 },
+  'Tanzania': { code: 'TZS', rate: 19.8 },
+  'Uganda': { code: 'UGX', rate: 28.5 },
+  'Rwanda': { code: 'RWF', rate: 9.8 },
+  'Burundi': { code: 'BIF', rate: 22.1 },
+  'South Sudan': { code: 'SSP', rate: 10.2 },
+  'Ethiopia': { code: 'ETB', rate: 0.95 },
+  'Somalia': { code: 'SOS', rate: 4.4 },
+  'Eritrea': { code: 'ERN', rate: 0.12 },
+  'Djibouti': { code: 'DJF', rate: 1.38 },
+  'South Africa': { code: 'ZAR', rate: 0.15 },
   'Nigeria': { code: 'NGN', rate: 12.5 },
   'Ghana': { code: 'GHS', rate: 0.12 },
-  'South Africa': { code: 'ZAR', rate: 0.15 },
+  'Egypt': { code: 'EGP', rate: 0.38 },
   'Default': { code: 'USD', rate: 0.0078 }
 }
 
@@ -40,6 +69,8 @@ export default function RechargePage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [loadingProfile, setLoadingProfile] = useState(true)
+  const [manualCountry, setManualCountry] = useState<string | null>(null)
+  const [isCurrencyOpen, setIsCurrencyOpen] = useState(false)
 
   useEffect(() => {
     if (!user?.id) return
@@ -49,9 +80,12 @@ export default function RechargePage() {
     })
   }, [user?.id])
 
+  const currentCountry = manualCountry || profile?.country || 'Kenya'
+  const currencyInfo = RATES[currentCountry as keyof typeof RATES] || RATES['Default']
   const selectedPackage = PACKAGES.find(p => p.id === selectedId)
-  const isPesaPalCountry = profile && !['Nigeria', 'Ghana', 'South Africa'].includes(profile.country)
-  const currencyInfo = profile ? (RATES[profile.country as keyof typeof RATES] || RATES['Default']) : RATES['Kenya']
+  
+  // PesaPal restricted for Merchant-only regions
+  const isPesaPalCountry = !['Nigeria', 'Ghana', 'South Africa'].includes(currentCountry)
 
   const handleRecharge = async () => {
     if (!user) {
@@ -65,7 +99,6 @@ export default function RechargePage() {
     }
 
     if (!isPesaPalCountry) {
-      // REDIRECT TO MERCHANT FLOW WITH SELECTION
       router.push(`/coin-sellers?selectedPackage=${selectedPackage.label}&amount=${selectedPackage.coins}`)
       return
     }
@@ -79,7 +112,7 @@ export default function RechargePage() {
         toast({ variant: "destructive", title: "Gateway Error", description: res.error || "Failed to initiate payment." })
       }
     } catch (err) {
-      toast({ variant: "destructive", title: "Network Error", description: "Could not connect to payment server." })
+      toast({ variant: "destructive", title: "Network Error" })
     } finally {
       setIsProcessing(false)
     }
@@ -93,9 +126,41 @@ export default function RechargePage() {
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none animate-in fade-in duration-500">
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
-        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black">
-          <ChevronLeft className="w-6 h-6" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black">
+            <ChevronLeft className="w-6 h-6" />
+          </Button>
+          <Dialog open={isCurrencyOpen} onOpenChange={setIsCurrencyOpen}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" className="h-9 px-3 rounded-xl border border-gray-100 flex items-center gap-2 bg-gray-50/50">
+                <Globe className="w-3.5 h-3.5 text-blue-500" />
+                <span className="text-[10px] font-black uppercase tracking-widest">{currencyInfo.code}</span>
+                <ChevronDown className="w-3 h-3 text-gray-400" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-[2.5rem] p-6 max-h-[80vh] flex flex-col border-none">
+              <DialogHeader><DialogTitle className="text-sm font-black uppercase tracking-widest text-center">Switch Currency</DialogTitle></DialogHeader>
+              <div className="grid grid-cols-2 gap-2 mt-4 overflow-y-auto pr-1 no-scrollbar">
+                {Object.keys(RATES).filter(k => k !== 'Default').map((country) => (
+                  <button 
+                    key={country}
+                    onClick={() => {
+                      setManualCountry(country);
+                      setIsCurrencyOpen(false);
+                    }}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all active:scale-95",
+                      currentCountry === country ? "border-blue-500 bg-blue-50" : "border-gray-50 bg-gray-50"
+                    )}
+                  >
+                    <span className="text-[10px] font-black text-black">{country}</span>
+                    <span className="text-[8px] font-bold text-gray-400 mt-1">{RATES[country as keyof typeof RATES].code}</span>
+                  </button>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
         <h1 className="text-sm font-black text-black uppercase tracking-widest">Store</h1>
         <Button variant="ghost" size="icon" onClick={() => router.push('/coin-history')} className="rounded-full text-black">
           <History className="w-5 h-5" />
@@ -116,7 +181,7 @@ export default function RechargePage() {
              <h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Select Package</h3>
              {!isPesaPalCountry && (
                <span className="text-[8px] font-bold text-[#00A2FF] bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1">
-                 <Info className="w-2.5 h-2.5" /> Merchant Only Region
+                 <Info className="w-2.5 h-2.5" /> Merchant Portal Only
                </span>
              )}
           </div>
@@ -172,8 +237,8 @@ export default function RechargePage() {
                 <MessageSquare className="w-4 h-4 text-yellow-400 fill-current" />
               </div>
               <div className="text-left">
-                <span className="block text-[11px] font-black uppercase tracking-widest leading-none">Merchant List</span>
-                <span className="text-[8px] opacity-60 font-bold">Fast Local Transfer</span>
+                <span className="block text-[11px] font-black uppercase tracking-widest leading-none">Find Merchant</span>
+                <span className="text-[8px] opacity-60 font-bold">Manual Transfer & Escrow</span>
               </div>
             </div>
             <ExternalLink className="w-4 h-4 text-yellow-400" />
@@ -185,9 +250,9 @@ export default function RechargePage() {
               <span className="text-[9px] font-black tracking-[0.2em]">Secured by PesaPal</span>
             </div>
           ) : (
-             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 text-center">
-               <p className="text-[9px] font-bold text-amber-700 leading-relaxed uppercase tracking-widest">
-                 Please select a package above to contact a merchant for local payment.
+             <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 text-center">
+               <p className="text-[9px] font-bold text-blue-700 leading-relaxed uppercase tracking-widest">
+                 Automated card payments are unavailable in {currentCountry}. Please select a package to contact a verified merchant.
                </p>
              </div>
           )}

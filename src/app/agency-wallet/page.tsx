@@ -8,7 +8,17 @@ import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ChevronLeft, Gem, Banknote, History, Wallet, ArrowRightLeft, Loader2, Info } from "lucide-react"
+import { 
+  ChevronLeft, 
+  Gem, 
+  Banknote, 
+  History, 
+  Wallet, 
+  ArrowRightLeft, 
+  Loader2, 
+  Info,
+  ShieldCheck
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { requestWithdrawalAction } from "@/app/actions/matchflow-actions"
 
@@ -57,17 +67,8 @@ export default function AgencyMemberPage() {
       const res = await requestWithdrawalAction(user!.id, amount, Number(expectedKes), profile.agency_id)
       
       if (res.success) {
-        // Track deduction in diamond history
-        await supabase.from('diamond_history').insert({
-          user_id: user!.id,
-          amount: -amount,
-          type: 'withdrawal',
-          description: `Payout Request KES ${expectedKes}`,
-          timestamp: ts
-        })
-        
         setBalances({ ...balances, diamonds: balances.diamonds - amount })
-        toast({ title: "Request Sent", description: "Ledger updated." })
+        toast({ title: "Request Sent", description: "Your agency leader will process this payout." })
         setDiamondsToUse("")
       } else {
         toast({ variant: "destructive", title: "Error", description: res.error })
@@ -120,11 +121,14 @@ export default function AgencyMemberPage() {
             </div>
           )}
 
-          <div className="p-4 bg-gray-50 rounded-2xl border border-black/5 flex items-start gap-3">
-            <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-            <p className="text-[10px] font-bold text-gray-400 leading-relaxed uppercase tracking-widest">
-              Please note: Transaction and processing charges apply during withdrawal according to your local bank or mobile money provider.
-            </p>
+          <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4">
+            <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-[10px] font-black text-amber-900 uppercase tracking-widest">Financial Notice</p>
+              <p className="text-[10px] font-bold text-amber-700 leading-relaxed uppercase tracking-widest">
+                Please note: Standard transaction and processing charges apply during withdrawal based on your local bank or mobile money provider (M-Pesa).
+              </p>
+            </div>
           </div>
 
           <Button className="w-full h-16 rounded-full bg-green-600 text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all" onClick={handleWithdraw} disabled={isProcessing || !diamondsToUse || Number(diamondsToUse) < minDiamondsForCash}>
