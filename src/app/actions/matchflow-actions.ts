@@ -1,4 +1,3 @@
-
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -256,6 +255,32 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
   }
 }
 
+export async function markChatAsReadAction(userId: string, chatId: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const { data: chat } = await supabase.from('chats').select('last_seen_at').eq('id', chatId).single();
+    const last_seen_at = (chat?.last_seen_at as Record<string, number>) || {};
+    last_seen_at[userId] = Date.now();
+    await supabase.from('chats').update({ last_seen_at }).eq('id', chatId);
+    return { success: true };
+  } catch (err) {
+    return { success: false };
+  }
+}
+
+export async function clearChatAction(userId: string, chatId: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const { data: chat } = await supabase.from('chats').select('cleared_at').eq('id', chatId).single();
+    const cleared_at = (chat?.cleared_at as Record<string, number>) || {};
+    cleared_at[userId] = Date.now();
+    await supabase.from('chats').update({ cleared_at }).eq('id', chatId);
+    return { success: true };
+  } catch (err) {
+    return { success: false };
+  }
+}
+
 export async function sendMysteryNoteAction(senderUid: string, text: string, count: number) {
   const supabase = getSupabaseAdmin();
   try {
@@ -298,6 +323,23 @@ export async function requestWithdrawalAction(userUid: string, diamonds: number,
   }
 }
 
+export async function updateWithdrawalStatusAction(requestId: string, status: 'paid' | 'rejected') {
+  const supabase = getSupabaseAdmin();
+  try {
+    const { data: req } = await supabase.from('withdrawals').select('*').eq('id', requestId).single();
+    if (!req) throw new Error("Request not found");
+
+    if (status === 'rejected' && req.status === 'pending') {
+      await supabase.rpc("increment_diamonds", { p_user_id: req.user_id, p_amount: req.diamonds });
+    }
+    
+    await supabase.from('withdrawals').update({ status }).eq('id', requestId);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function createAgencyAction(agentUid: string, name: string) {
   const supabase = getSupabaseAdmin();
   try {
@@ -318,6 +360,20 @@ export async function joinAgencyAction(userUid: string, code: string) {
     const { data: agency } = await supabase.from('agencies').select('code').eq('code', code).maybeSingle();
     if (!agency) throw new Error("Invalid Code.");
     await supabase.from('users').update({ agency_id: code, agency_status: 'pending' }).eq('uid', userUid);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function reviewRecruitmentAction(applicantUid: string, status: 'approved' | 'rejected') {
+  const supabase = getSupabaseAdmin();
+  try {
+    if (status === 'approved') {
+      await supabase.from('users').update({ agency_status: 'approved' }).eq('uid', applicantUid);
+    } else {
+      await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('uid', applicantUid);
+    }
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
