@@ -49,14 +49,14 @@ function CoinSellersContent() {
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
-        <h1 className="text-sm font-bold text-black uppercase tracking-widest">Merchants</h1>
+        <h1 className="text-sm font-bold text-black uppercase tracking-widest">Coinsellers</h1>
         <div className="w-10" />
       </header>
 
       <main className="flex-1 p-6">
         <div className="mb-8 space-y-3">
           <div className="flex items-center gap-2 text-[#00A2FF]"><ShieldCheck className="w-5 h-5" /><h2 className="text-lg font-bold">Verified Partners</h2></div>
-          <p className="text-[11px] font-medium text-gray-500 leading-relaxed">Choose a certified merchant to complete your purchase via local transfer. They will credit your account instantly.</p>
+          <p className="text-[11px] font-medium text-gray-500 leading-relaxed">Choose a certified coinseller to complete your purchase via local transfer. They will credit your account instantly.</p>
           
           {selectedPkg && (
             <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-2xl border border-blue-100 animate-in zoom-in-95">
@@ -71,7 +71,7 @@ function CoinSellersContent() {
 
         {loading ? <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-[#00A2FF]" /></div> : sellers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 px-12 text-center opacity-40">
-            <ShieldCheck className="w-16 h-16 mb-4 text-gray-300" /><p className="font-bold text-sm uppercase tracking-widest text-gray-400">No active merchants</p>
+            <ShieldCheck className="w-16 h-16 mb-4 text-gray-300" /><p className="font-bold text-sm uppercase tracking-widest text-gray-400">No active coinsellers</p>
           </div>
         ) : (
           <div className="space-y-4">

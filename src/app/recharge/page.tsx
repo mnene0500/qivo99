@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -69,13 +70,17 @@ export default function RechargePage() {
   const [profile, setProfile] = useState<any>(null)
   const [manualCountry, setManualCountry] = useState<string | null>(null)
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
     if (!user?.id) return
     supabase.from('users').select('country').eq('uid', user.id).single().then(({ data }) => {
       setProfile(data)
     })
   }, [user?.id])
+
+  if (!mounted) return null
 
   const currentCountry = manualCountry || profile?.country || 'Kenya'
   const currencyInfo = RATES[currentCountry as keyof typeof RATES] || RATES['Default']
@@ -89,19 +94,19 @@ export default function RechargePage() {
       return
     }
 
-    if (!selectedPackage) {
+    if (!selectedId) {
       toast({ title: "Select a package first" })
       return
     }
 
     if (!isPesaPalCountry) {
-      router.push(`/coin-sellers?selectedPackage=${selectedPackage.label}&amount=${selectedPackage.coins}`)
+      router.push(`/coin-sellers?selectedPackage=${selectedPackage?.label}&amount=${selectedPackage?.coins}`)
       return
     }
     
     setIsProcessing(true)
     try {
-      const res = await initiatePesaPalPayment(user.id, selectedPackage.priceKes, selectedPackage.coins)
+      const res = await initiatePesaPalPayment(user.id, selectedPackage!.priceKes, selectedPackage!.coins)
       if (res.success && res.redirect_url) {
         window.location.href = res.redirect_url
       } else {
@@ -120,7 +125,7 @@ export default function RechargePage() {
   }
 
   return (
-    <div className="flex flex-col min-h-full bg-white select-none relative">
+    <div className="flex flex-col min-h-screen bg-white select-none relative overflow-hidden">
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-[60]">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black">
@@ -163,61 +168,56 @@ export default function RechargePage() {
         </Button>
       </header>
 
-      <main className="flex-1 p-5 space-y-8">
-        <div className="flex flex-col items-center gap-2 pt-4">
-            <div className="bg-yellow-50 px-6 py-3 rounded-full flex items-center gap-3 border border-yellow-100 shadow-sm">
-                <Coins className='w-6 h-6 text-yellow-500 fill-yellow-500'/>
-                <span className="text-2xl font-black text-black">{coins}</span>
+      <main className="flex-1 overflow-y-auto no-scrollbar pb-64">
+        <div className="p-5 space-y-8">
+          <div className="flex flex-col items-center gap-2 pt-4">
+              <div className="bg-yellow-50 px-6 py-3 rounded-full flex items-center gap-3 border border-yellow-100 shadow-sm">
+                  <Coins className='w-6 h-6 text-yellow-500 fill-yellow-500'/>
+                  <span className="text-2xl font-black text-black">{coins}</span>
+              </div>
+              <p className="text-[10px] font-bold text-gray-400 tracking-widest">Balance Available</p>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">Select Package</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {PACKAGES.map((pkg) => (
+                <button 
+                  key={pkg.id} 
+                  onClick={() => setSelectedId(pkg.id)}
+                  className={cn(
+                    "relative flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all active:scale-95 h-32",
+                    selectedId === pkg.id 
+                      ? "border-[#00A2FF] bg-blue-50/50 shadow-lg shadow-blue-100" 
+                      : "border-gray-50 bg-gray-50/30 hover:border-gray-100"
+                  )}
+                >
+                  {selectedId === pkg.id && (
+                    <div className="absolute -top-2 -right-1 bg-[#00A2FF] text-white p-1 rounded-full shadow-lg">
+                      <Check className="w-3 h-3" />
+                    </div>
+                  )}
+                  <div className="flex flex-col items-center gap-1 mb-2">
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center mb-1 transition-colors",
+                      selectedId === pkg.id ? "bg-[#00A2FF] text-white" : "bg-white shadow-sm text-yellow-500"
+                    )}>
+                      <Coins className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-black text-black leading-none">{pkg.coins.toLocaleString()}</span>
+                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Coins</span>
+                  </div>
+                  <div className="mt-auto">
+                    <span className={cn(
+                      "text-[9px] font-black",
+                      selectedId === pkg.id ? "text-[#00A2FF]" : "text-gray-400"
+                    )}>{formatPrice(pkg.priceKes)}</span>
+                  </div>
+                </button>
+              ))}
             </div>
-            <p className="text-[10px] font-bold text-gray-400 tracking-widest">Balance Available</p>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-1">
-             <h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Select Package</h3>
           </div>
-          
-          <div className="grid grid-cols-2 gap-3">
-            {PACKAGES.map((pkg) => (
-              <button 
-                key={pkg.id} 
-                onClick={() => setSelectedId(pkg.id)}
-                className={cn(
-                  "relative flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all active:scale-95 h-32",
-                  selectedId === pkg.id 
-                    ? "border-[#00A2FF] bg-blue-50/50 shadow-lg shadow-blue-100" 
-                    : "border-gray-50 bg-gray-50/30 hover:border-gray-100"
-                )}
-              >
-                {selectedId === pkg.id && (
-                  <div className="absolute -top-2 -right-1 bg-[#00A2FF] text-white p-1 rounded-full shadow-lg">
-                    <Check className="w-3 h-3" />
-                  </div>
-                )}
-                
-                <div className="flex flex-col items-center gap-1 mb-2">
-                  <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center mb-1 transition-colors",
-                    selectedId === pkg.id ? "bg-[#00A2FF] text-white" : "bg-white shadow-sm text-yellow-500"
-                  )}>
-                    <Coins className="w-4 h-4" />
-                  </div>
-                  <span className="text-sm font-black text-black leading-none">{pkg.label}</span>
-                  <span className="text-[8px] font-bold text-gray-400">Coins</span>
-                </div>
-                
-                <div className="mt-auto">
-                  <span className={cn(
-                    "text-[9px] font-black",
-                    selectedId === pkg.id ? "text-[#00A2FF]" : "text-gray-400"
-                  )}>{formatPrice(pkg.priceKes)}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
 
-        <div className="space-y-4 pb-20">
           <Button 
             onClick={() => router.push('/coin-sellers')}
             variant="ghost"
@@ -236,7 +236,7 @@ export default function RechargePage() {
           </Button>
 
           {isPesaPalCountry && (
-            <div className="flex items-center justify-center gap-2 text-gray-300 py-4">
+            <div className="flex items-center justify-center gap-2 text-gray-300 pt-4">
               <ShieldCheck className="w-4 h-4" />
               <span className="text-[9px] font-black tracking-[0.2em]">Secured by PesaPal</span>
             </div>

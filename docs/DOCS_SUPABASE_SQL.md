@@ -56,10 +56,18 @@ CREATE TABLE IF NOT EXISTS public.users (
 );
 
 CREATE TABLE IF NOT EXISTS public.balances (
-  user_id UUID PRIMARY KEY REFERENCES public.users(uid) ON DELETE CASCADE,
+  user_id PRIMARY KEY REFERENCES public.users(uid) ON DELETE CASCADE,
   coins BIGINT DEFAULT 0,
   diamonds NUMERIC DEFAULT 0,
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  endpoint TEXT UNIQUE NOT NULL,
+  subscription_json JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.calls (
@@ -70,41 +78,6 @@ CREATE TABLE IF NOT EXISTS public.calls (
   type TEXT CHECK (type IN ('video', 'voice')),
   status TEXT DEFAULT 'calling', -- calling, active, ended
   created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.pending_payments (
-  order_id UUID PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  amount NUMERIC,
-  status TEXT DEFAULT 'pending',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.processed_payments (
-  order_tracking_id TEXT PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  amount NUMERIC,
-  coins BIGINT,
-  payment_method TEXT,
-  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
-);
-
-CREATE TABLE IF NOT EXISTS public.coin_history (
-  id BIGSERIAL PRIMARY KEY,
-  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
-  amount BIGINT,
-  type TEXT, 
-  description TEXT,
-  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
-);
-
-CREATE TABLE IF NOT EXISTS public.diamond_history (
-  id BIGSERIAL PRIMARY KEY,
-  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
-  amount NUMERIC,
-  type TEXT, 
-  description TEXT,
-  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
 CREATE TABLE IF NOT EXISTS public.chats (
@@ -155,44 +128,19 @@ CREATE TABLE IF NOT EXISTS public.reports (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 3. ENABLE REALTIME SAFELY (FULL PAYLOAD)
-ALTER TABLE public.balances REPLICA IDENTITY FULL;
-ALTER TABLE public.users REPLICA IDENTITY FULL;
-ALTER TABLE public.calls REPLICA IDENTITY FULL;
-ALTER TABLE public.chats REPLICA IDENTITY FULL;
-ALTER TABLE public.messages REPLICA IDENTITY FULL;
-ALTER TABLE public.withdrawals REPLICA IDENTITY FULL;
-ALTER TABLE public.reports REPLICA IDENTITY FULL;
-
-DO $$ 
-BEGIN 
-  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-    CREATE PUBLICATION supabase_realtime;
-  END IF;
-END $$;
-
-ALTER PUBLICATION supabase_realtime SET TABLE 
-  public.balances, 
-  public.users, 
-  public.calls, 
-  public.chats, 
-  public.messages,
-  public.withdrawals, 
-  public.reports;
-
--- 4. ENABLE RLS & POLICIES
+-- 3. ENABLE RLS & POLICIES
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.balances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
--- 5. CREATE POLICIES
+-- 4. CREATE POLICIES
 DROP POLICY IF EXISTS "Users can manage own profile" ON public.users;
-CREATE POLICY "Users can manage own profile" ON public.users 
-FOR ALL USING (auth.uid() = uid) WITH CHECK (auth.uid() = uid);
+CREATE POLICY "Users can manage own profile" ON public.users FOR ALL USING (auth.uid() = uid) WITH CHECK (auth.uid() = uid);
 
 DROP POLICY IF EXISTS "Public profiles are viewable" ON public.users;
 CREATE POLICY "Public profiles are viewable" ON public.users FOR SELECT USING (true);
@@ -200,17 +148,13 @@ CREATE POLICY "Public profiles are viewable" ON public.users FOR SELECT USING (t
 DROP POLICY IF EXISTS "Users view own balance" ON public.balances;
 CREATE POLICY "Users view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users manage own push subs" ON public.push_subscriptions;
+CREATE POLICY "Users manage own push subs" ON public.push_subscriptions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 DROP POLICY IF EXISTS "Participants can view chats" ON public.chats;
 CREATE POLICY "Participants can view chats" ON public.chats FOR SELECT USING (auth.uid() = ANY(participant_ids));
 
-DROP POLICY IF EXISTS "Withdrawals are visible to user and agency agent" ON public.withdrawals;
-CREATE POLICY "Withdrawals are visible to user and agency agent" ON public.withdrawals
-FOR SELECT USING (
-  auth.uid() = user_id OR 
-  auth.uid() IN (SELECT agent_uid FROM public.agencies WHERE code = agency_id)
-);
-
--- 6. GRANT PERMISSIONS
+-- 5. GRANT PERMISSIONS
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
