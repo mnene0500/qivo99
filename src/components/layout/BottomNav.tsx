@@ -1,7 +1,8 @@
+
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Home, MessageSquare, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useEffect, useState } from "react"
@@ -10,10 +11,11 @@ import { useUser } from "@/firebase/auth/use-user"
 
 /**
  * @fileOverview Strictly Fixed Global Navigation.
- * Updated to Title Case and fixed Link import.
+ * Includes "Double Tap to Refresh" logic for Home and Chat.
  */
 export function BottomNav() {
   const pathname = usePathname()
+  const router = useRouter()
   const { user } = useUser()
   const [totalUnread, setTotalUnread] = useState(0)
 
@@ -45,6 +47,14 @@ export function BottomNav() {
     return () => { supabase.removeChannel(channel) }
   }, [user?.id])
 
+  const handleNavClick = (e: React.MouseEvent, href: string) => {
+    if (pathname === href) {
+      e.preventDefault();
+      // Dispatch custom event to signal refresh/scroll-to-top
+      window.dispatchEvent(new CustomEvent('qivo-nav-refresh', { detail: { path: href } }));
+    }
+  }
+
   const navItems = [
     { label: "Home", icon: Home, href: "/home" },
     { label: "Chat", icon: MessageSquare, href: "/chats", badge: totalUnread },
@@ -54,12 +64,13 @@ export function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white/95 backdrop-blur-xl border-t h-16 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom,4px)] shadow-[0_-10px_30px_rgba(0,0,0,0.06)]">
       {navItems.map((item) => {
-        const isActive = pathname === item.href || (item.href === '/chats' && pathname === '/chats')
+        const isActive = pathname === item.href
         
         return (
           <Link
             key={item.href}
             href={item.href}
+            onClick={(e) => handleNavClick(e, item.href)}
             className={cn(
               "flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-all relative",
               isActive ? "text-[#00A2FF]" : "text-gray-300"

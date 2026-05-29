@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, Suspense, useCallback, useRef } from "react"
@@ -66,13 +67,11 @@ function ChatsContent() {
   const { coins } = useBalance()
   const startWithId = searchParams.get("startWith")
   
-  // Chat List States
   const [chatSummaries, setChatSummaries] = useState<ChatSummary[]>(cachedSummaries)
   const [loadingSummaries, setLoadingSummaries] = useState(false)
   const [summaryPage, setSummaryPage] = useState(0)
   const [hasMoreSummaries, setHasMoreSummaries] = useState(true)
 
-  // Conversation States
   const [chatId, setChatId] = useState<string | null>(null)
   const [newMessage, setNewMessage] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
@@ -81,20 +80,20 @@ function ChatsContent() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [hasMoreMessages, setHasMoreMessages] = useState(true)
   
-  // Gifting States
   const [isGifting, setIsGifting] = useState(false)
   const [giftDialogOpen, setGiftDialogOpen] = useState(false)
-
-  // Delete State
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
+
+  const observerTarget = useRef<HTMLDivElement>(null)
+  const messageObserverTarget = useRef<HTMLDivElement>(null)
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
   const isLongPress = useRef(false)
 
   // --------------------------------------------------------------------------
-  // CHAT SUMMARIES LOGIC
+  // CHAT SUMMARIES LOGIC (INFINITE SCROLL)
   // --------------------------------------------------------------------------
   const fetchSummaries = useCallback(async (pageNum = 0) => {
-    if (!currentUser?.id) return
+    if (!currentUser?.id || loadingSummaries) return
     if (pageNum === 0) setLoadingSummaries(true)
     
     const from = pageNum * SUMMARY_PAGE_SIZE;
@@ -159,7 +158,7 @@ function ChatsContent() {
     setHasMoreSummaries(chatsData.length === SUMMARY_PAGE_SIZE);
     setSummaryPage(pageNum);
     setLoadingSummaries(false);
-  }, [currentUser?.id])
+  }, [currentUser?.id, loadingSummaries])
 
   useEffect(() => {
     if (currentUser?.id && !startWithId) {
@@ -171,15 +170,38 @@ function ChatsContent() {
     }
   }, [currentUser?.id, startWithId, fetchSummaries])
 
+  // INFINITE SCROLL OBSERVER (SUMMARY LIST)
+  useEffect(() => {
+    if (!startWithId && hasMoreSummaries) {
+      const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !loadingSummaries) {
+          fetchSummaries(summaryPage + 1);
+        }
+      }, { threshold: 0.1 });
+      if (observerTarget.current) observer.observe(observerTarget.current);
+      return () => observer.disconnect();
+    }
+  }, [startWithId, hasMoreSummaries, loadingSummaries, summaryPage, fetchSummaries]);
+
+  // REFRESH EVENT
+  useEffect(() => {
+    const handleRefresh = (e: any) => {
+      if (e.detail.path === '/chats' && !startWithId) {
+        fetchSummaries(0);
+      }
+    }
+    window.addEventListener('qivo-nav-refresh', handleRefresh);
+    return () => window.removeEventListener('qivo-nav-refresh', handleRefresh);
+  }, [fetchSummaries, startWithId])
+
   // --------------------------------------------------------------------------
-  // CONVERSATION LOGIC (PAGINATED ON SCROLL)
+  // CONVERSATION LOGIC (FETCH ON SCROLL UP)
   // --------------------------------------------------------------------------
   const fetchMessagesBatch = useCallback(async (isLoadMore = false) => {
     if (!chatId || activeChatClearedAt === -1 || loadingMessages) return;
     if (isLoadMore && !hasMoreMessages) return;
 
     setLoadingMessages(true);
-    
     let query = supabase
       .from('messages')
       .select('id, text, sender_id, timestamp, is_gift')
@@ -206,6 +228,19 @@ function ChatsContent() {
     setLoadingMessages(false);
   }, [chatId, activeChatClearedAt, messages, hasMoreMessages, loadingMessages]);
 
+  // SCROLL UP OBSERVER (MESSAGES)
+  useEffect(() => {
+    if (startWithId && hasMoreMessages) {
+      const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !loadingMessages) {
+          fetchMessagesBatch(true);
+        }
+      }, { threshold: 0.1 });
+      if (messageObserverTarget.current) observer.observe(messageObserverTarget.current);
+      return () => observer.disconnect();
+    }
+  }, [startWithId, hasMoreMessages, loadingMessages, fetchMessagesBatch]);
+
   useEffect(() => {
     if (currentUser?.id && startWithId) {
       const ids = [currentUser.id, startWithId].sort()
@@ -229,7 +264,6 @@ function ChatsContent() {
   useEffect(() => {
     if (chatId && activeChatClearedAt !== -1) {
       fetchMessagesBatch(false);
-      
       const channel = supabase.channel(`messages:${chatId}`)
         .on('postgres_changes', { event: 'INSERT', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
           const newMsg = payload.new as Message
@@ -282,17 +316,6 @@ function ChatsContent() {
     setIsGifting(false);
   }
 
-  const handleClearChat = async (id?: string) => {
-    const targetId = id || chatId
-    if (!currentUser || !targetId) return
-    setChatSummaries(prev => prev.filter(s => s.id !== targetId))
-    const res = await clearChatAction(currentUser.id, targetId)
-    if (res.success) {
-      toast({ title: "Chat Deleted" })
-      if (!id || id === chatId) { setMessages([]); if (startWithId) router.push("/chats") }
-    }
-  }
-
   const handleTouchStart = (id: string) => {
     isLongPress.current = false
     longPressTimer.current = setTimeout(() => { isLongPress.current = true; setDeletingChatId(id) }, 400)
@@ -313,7 +336,7 @@ function ChatsContent() {
       <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/90 backdrop-blur-md z-[50]">
         <h1 className="text-3xl font-logo text-[#00A2FF]">Chats</h1>
       </header>
-      <main className="flex flex-col pb-32">
+      <main className="flex flex-col">
         {chatSummaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-40 opacity-40 px-12 text-center text-gray-300">
             <User className="w-12 h-12 mb-4" /><p className="font-bold text-xs uppercase tracking-widest">No conversations</p>
@@ -335,23 +358,19 @@ function ChatsContent() {
                 </div>
               </div>
             ))}
-            {hasMoreSummaries && (
-              <div className="p-8 flex justify-center">
-                <Button variant="ghost" onClick={() => fetchSummaries(summaryPage + 1)} disabled={loadingSummaries} className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
-                  {loadingSummaries ? <Loader2 className="animate-spin w-4 h-4" /> : "Load More Chats"}
-                </Button>
-              </div>
-            )}
+            <div ref={observerTarget} className="h-20 flex items-center justify-center">
+              {hasMoreSummaries && <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" />}
+            </div>
           </>
         )}
       </main>
 
       <AlertDialog open={!!deletingChatId} onOpenChange={(open) => !open && setDeletingChatId(null)}>
         <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none shadow-2xl">
-          <AlertDialogHeader className="items-center text-center"><AlertDialogTitle className="text-xl font-bold">Delete conversation?</AlertDialogTitle><AlertDialogDescription className="text-xs uppercase font-bold tracking-widest text-gray-400">History will be cleared.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader className="items-center text-center"><AlertDialogTitle className="text-xl font-bold">Delete Conversation?</AlertDialogTitle><AlertDialogDescription className="text-xs uppercase font-bold tracking-widest text-gray-400">History will be cleared.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter className="flex flex-row items-center justify-center gap-4 mt-6">
             <AlertDialogCancel className="flex-1 h-14 rounded-full bg-gray-50">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (deletingChatId) handleClearChat(deletingChatId); setDeletingChatId(null); }} className="flex-1 h-14 rounded-full bg-red-500">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={() => { if (deletingChatId) clearChatAction(currentUser!.id, deletingChatId); setDeletingChatId(null); fetchSummaries(0); }} className="flex-1 h-14 rounded-full bg-red-500">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -374,7 +393,7 @@ function ChatsContent() {
           <DropdownMenuContent align="end" className="rounded-2xl min-w-[160px]">
             <AlertDialog>
               <AlertDialogTrigger asChild><DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-500 font-bold gap-2"><Trash2 className="w-4 h-4" /> Delete Chat</DropdownMenuItem></AlertDialogTrigger>
-              <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none"><AlertDialogHeader className="items-center text-center"><AlertDialogTitle className="text-xl font-bold">Delete Chat?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter className="flex flex-row items-center justify-center gap-4 mt-6"><AlertDialogCancel className="flex-1 h-14 rounded-full bg-gray-50">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleClearChat()} className="flex-1 h-14 rounded-full bg-red-500">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+              <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none"><AlertDialogHeader className="items-center text-center"><AlertDialogTitle className="text-xl font-bold">Delete Chat?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter className="flex flex-row items-center justify-center gap-4 mt-6"><AlertDialogCancel className="flex-1 h-14 rounded-full bg-gray-50">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { clearChatAction(currentUser!.id, chatId!); router.push("/chats"); }} className="flex-1 h-14 rounded-full bg-red-500">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
             </AlertDialog>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -393,14 +412,9 @@ function ChatsContent() {
             </div>
           )
         })}
-
-        {hasMoreMessages && (
-          <div className="py-10 flex justify-center">
-             <Button variant="ghost" onClick={() => fetchMessagesBatch(true)} disabled={loadingMessages} className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-               {loadingMessages ? <Loader2 className="animate-spin w-4 h-4" /> : "Load older messages"}
-             </Button>
-          </div>
-        )}
+        <div ref={messageObserverTarget} className="h-10 flex items-center justify-center py-4">
+          {hasMoreMessages && <Loader2 className="w-4 h-4 animate-spin text-gray-300" />}
+        </div>
       </main>
 
       <footer className="p-4 border-t bg-white pb-[env(safe-area-inset-bottom)] z-[50] sticky bottom-0">

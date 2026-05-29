@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
@@ -49,6 +50,7 @@ export default function HomePage() {
   const [hasMore, setHasMore] = useState(true)
   const [profile, setProfile] = useState<any>(null)
   
+  const observerTarget = useRef<HTMLDivElement>(null)
   const hasFetched = useRef(false)
 
   const fetchUsers = useCallback(async (pageNum = 0, isManual = false, targetTab?: 'Recommend' | 'Nearby') => {
@@ -110,6 +112,7 @@ export default function HomePage() {
     }
   }, [currentUser?.id, profile, activeTab]);
 
+  // INITIAL LOAD
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
       supabase.from('users').select('uid, gender, country, onboarding_complete').eq('uid', currentUser.id).single()
@@ -132,6 +135,35 @@ export default function HomePage() {
     }
   }, [profile, fetchUsers, activeTab]);
 
+  // INFINITE SCROLL OBSERVER
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isRefreshing && profile) {
+          fetchUsers(page + 1);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, isRefreshing, page, fetchUsers, profile]);
+
+  // REFRESH EVENT LISTENERS
+  useEffect(() => {
+    const handleRefresh = (e: any) => {
+      if (e.detail.path === '/home') {
+        fetchUsers(0, true);
+      }
+    }
+    window.addEventListener('qivo-nav-refresh', handleRefresh);
+    return () => window.removeEventListener('qivo-nav-refresh', handleRefresh);
+  }, [fetchUsers])
+
   const handleTabChange = (tab: 'Recommend' | 'Nearby') => {
     if (activeTab === tab) return;
     setActiveTab(tab);
@@ -139,11 +171,6 @@ export default function HomePage() {
     setPage(0);
     cachedPage = 0;
     fetchUsers(0, true, tab);
-  }
-
-  const handleLoadMore = () => {
-    if (isLoadingMore || !hasMore) return;
-    fetchUsers(page + 1);
   }
 
   if (authLoading || !isInitialized) return null;
@@ -217,18 +244,15 @@ export default function HomePage() {
               ))}
             </div>
             
-            {hasMore && (
-              <div className="py-12 flex justify-center">
-                <Button 
-                  onClick={handleLoadMore} 
-                  disabled={isLoadingMore} 
-                  variant="outline" 
-                  className="rounded-full border-gray-100 font-bold text-[11px] h-12 px-10 shadow-sm hover:bg-gray-50"
-                >
-                  {isLoadingMore ? <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" /> : "Show More Users"}
-                </Button>
-              </div>
-            )}
+            {/* INFINITE SCROLL SENTINEL */}
+            <div ref={observerTarget} className="h-20 flex items-center justify-center py-10">
+              {hasMore && (
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Searching more users...</span>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           !isRefreshing && (
