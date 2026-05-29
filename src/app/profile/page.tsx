@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
@@ -108,7 +109,6 @@ export default function MePage() {
   const isAgent = !!profile?.is_agent
   const isVerified = !!profile?.is_verified
   
-  // POLICY: Agency option appears for Kenyan Female users only
   const isKenyanFemale = profile?.gender === 'female' && profile?.country === 'Kenya'
   const isAgencyMember = profile?.agency_status === 'approved'
   
@@ -290,12 +290,12 @@ export default function MePage() {
                   <div className="h-16 flex items-center justify-between px-5">
                      <div className="flex items-center gap-4">
                        <div className="bg-blue-50 p-2.5 rounded-xl"><Briefcase className="w-5 h-5 text-blue-600" /></div>
-                       <div className="flex flex-col"><span className="font-black text-[11px] tracking-widest text-black uppercase">{isAgent ? "Leader" : "Member"}</span><span className="text-[9px] font-bold text-[#00A2FF] uppercase">{profile.agency_status}</span></div>
+                       <div className="flex flex-col"><span className="font-black text-[11px] tracking-widest text-black uppercase">{isAgent ? "Agency Leader" : "Agency Member"}</span><span className="text-[9px] font-bold text-[#00A2FF] uppercase">{profile.agency_status}</span></div>
                      </div>
                      {!isAgent && (
                        <AlertDialog>
                           <AlertDialogTrigger asChild><Button variant="ghost" size="sm" className="h-8 rounded-full text-red-500 text-[9px] font-black tracking-widest bg-red-50 px-4 uppercase">Leave</Button></AlertDialogTrigger>
-                          <AlertDialogContent className="rounded-3xl p-8 border-none"><AlertDialogHeader><AlertDialogTitle className="font-black text-center uppercase">Leave Agency?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter className="gap-3 mt-6"><AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleLeaveAgency} className="h-12 rounded-xl bg-red-500 font-black text-[10px] uppercase">Leave</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+                          <AlertDialogContent className="rounded-3xl p-8 border-none shadow-2xl"><AlertDialogHeader><AlertDialogTitle className="font-black text-center uppercase">Leave Agency?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter className="gap-3 mt-6"><AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleLeaveAgency} className="h-12 rounded-xl bg-red-500 font-black text-[10px] uppercase">Leave</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
                        </AlertDialog>
                      )}
                   </div>

@@ -6,9 +6,9 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 /**
  * @fileOverview Hardened Server Actions for QIVO.
  * Updated: 
- * - Default placeholders for males.
- * - Identity lock for verified users.
- * - Spin to Win game logic with 20-slot dynamic prizes.
+ * - Identity duplicate checks.
+ * - Multi-layered Reporting System.
+ * - Deep Blocking Logic.
  */
 
 export async function completeOnboardingAction(payload: {
@@ -20,7 +20,6 @@ export async function completeOnboardingAction(payload: {
     const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
     const timestamp = Date.now();
 
-    // Default placeholder for male users if no photo provided
     const defaultPhoto = payload.gender === 'male' 
       ? `https://picsum.photos/seed/${payload.uid}/400/400` 
       : payload.photo_url;
@@ -45,16 +44,14 @@ export async function completeOnboardingAction(payload: {
     const initialDiamonds = (payload.gender === 'female') ? 150 : 0;
 
     if (initialCoins > 0) {
-      const { error: coinErr } = await supabase.rpc("increment_coins", { p_user_id: payload.uid, p_amount: initialCoins });
-      if (coinErr) throw coinErr;
+      await supabase.rpc("increment_coins", { p_user_id: payload.uid, p_amount: initialCoins });
       await supabase.from('coin_history').insert({ 
         user_id: payload.uid, amount: initialCoins, type: 'bonus', description: 'Welcome Bonus', timestamp 
       });
     }
 
     if (initialDiamonds > 0) {
-      const { error: diaErr } = await supabase.rpc("increment_diamonds", { p_user_id: payload.uid, p_amount: initialDiamonds });
-      if (diaErr) throw diaErr;
+      await supabase.rpc("increment_diamonds", { p_user_id: payload.uid, p_amount: initialDiamonds });
       await supabase.from('diamond_history').insert({ 
         user_id: payload.uid, amount: initialDiamonds, type: 'bonus', description: 'Welcome Bonus', timestamp 
       });
@@ -109,6 +106,51 @@ export async function deleteUserCompletelyAction(uid: string) {
   } catch (err: any) {
     console.error("[Delete User Error]:", err.message);
     return { success: false, error: err.message || "Deep purge failed." };
+  }
+}
+
+export async function reportUserAction(payload: { 
+  reporterId: string; 
+  reportedId: string; 
+  reason: string; 
+  description: string; 
+  proofPhotoUrl?: string; 
+}) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const { error } = await supabase.from('reports').insert({
+      reporter_id: payload.reporterId,
+      reported_id: payload.reportedId,
+      reason: payload.reason,
+      description: payload.description,
+      proof_photo_url: payload.proofPhotoUrl,
+      status: 'pending',
+      timestamp: Date.now()
+    });
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function resolveReportAction(adminUid: string, reportId: string, reporterUid: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const { data: admin } = await supabase.from('users').select('is_owner, is_special_user').eq('uid', adminUid).single();
+    if (!admin?.is_owner && !admin?.is_special_user) throw new Error("Unauthorized");
+
+    await supabase.from('reports').update({ status: 'resolved' }).eq('id', reportId);
+    
+    // Notify reporter (Optional implementation: send message from System)
+    const systemMsg = "System: Your recent report has been reviewed and resolved. Thank you for keeping QIVO safe.";
+    const ids = ['system', reporterUid].sort();
+    const chatId = `system_${reporterUid}`;
+    await supabase.from('messages').insert({ chat_id: chatId, sender_id: adminUid, text: systemMsg, timestamp: Date.now() });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 }
 
@@ -215,8 +257,12 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
   const supabase = getSupabaseAdmin();
   const timestamp = Date.now();
   try {
-    const { data: sender } = await supabase.from('users').select('gender, is_owner, is_coin_seller, is_special_user').eq('uid', payload.senderId).single();
-    const { data: recipient } = await supabase.from('users').select('is_special_user, is_coin_seller, is_owner').eq('uid', payload.recipientId).single();
+    const { data: sender } = await supabase.from('users').select('gender, is_owner, is_coin_seller, is_special_user, blocking, blocked_by').eq('uid', payload.senderId).single();
+    const { data: recipient } = await supabase.from('users').select('is_special_user, is_coin_seller, is_owner, blocking, blocked_by').eq('uid', payload.recipientId).single();
+
+    if (sender?.blocking?.includes(payload.recipientId) || recipient?.blocking?.includes(payload.senderId)) {
+       return { success: false, error: "blocked" };
+    }
 
     const cost = 15;
     const isFree = sender?.is_owner || sender?.is_special_user || sender?.is_coin_seller || recipient?.is_special_user || recipient?.is_coin_seller || recipient?.is_owner;
@@ -412,7 +458,6 @@ export async function playSpinGameAction(userId: string, stake: number) {
     const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', userId).single();
     if ((Number(bal?.coins) || 0) < stake) throw new Error("Insufficient coins.");
 
-    // Dynamic Prize Logic based on stake (20 Slots)
     let prizes: number[] = [];
     if (stake === 20) {
       prizes = [0, 5, 10, 0, 20, 0, 50, 5, 0, 10, 20, 0, 5, 0, 30, 0, 10, 50, 0, 15];

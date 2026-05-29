@@ -118,7 +118,6 @@ export default function ManageReportsPage() {
           <div className="space-y-8">
             {reports.map((report) => (
               <div key={report.id} className="p-6 bg-gray-50 rounded-[2.5rem] border border-black/5 space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                {/* HEADER: TIMESTAMPS & REASON */}
                 <div className="flex justify-between items-start">
                    <div className="space-y-1">
                       <div className="flex items-center gap-2 px-3 py-1 bg-red-50 text-red-600 rounded-full border border-red-100 w-fit">
@@ -135,7 +134,6 @@ export default function ManageReportsPage() {
                    </div>
                 </div>
 
-                {/* THE USERS */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Reporter</p>
@@ -159,7 +157,6 @@ export default function ManageReportsPage() {
                   </div>
                 </div>
 
-                {/* DESCRIPTION */}
                 <div className="space-y-2">
                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
                     <MessageSquareText className="w-3 h-3" /> Explanation
@@ -169,7 +166,6 @@ export default function ManageReportsPage() {
                   </div>
                 </div>
 
-                {/* PROOF PHOTO */}
                 {report.proof_photo_url && (
                   <div className="space-y-2">
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
@@ -182,7 +178,6 @@ export default function ManageReportsPage() {
                   </div>
                 )}
 
-                {/* RESOLUTION BUTTON */}
                 <Button 
                   onClick={() => handleResolve(report.id, report.reporter_id)}
                   disabled={processingId === report.id}

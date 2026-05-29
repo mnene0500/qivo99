@@ -24,7 +24,6 @@ interface UserProfile {
 
 const PAGE_SIZE = 12;
 
-// GLOBAL CACHE FOR INSTANT LOADING
 let cachedUsers: UserProfile[] = [];
 let cachedTab: 'Recommend' | 'Nearby' = 'Recommend';
 let cachedPage = 0;
@@ -45,7 +44,6 @@ export default function HomePage() {
   
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
-  // Start with cached data if available
   const [users, setUsers] = useState<UserProfile[]>(cachedUsers)
   const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>(cachedTab)
   const [page, setPage] = useState(cachedPage)
@@ -59,8 +57,6 @@ export default function HomePage() {
     if (!profile) return;
     
     const currentTab = targetTab || activeTab;
-    
-    // Only show the big loading indicator if the cache is empty
     const shouldShowLoading = pageNum === 0 && users.length === 0;
     if (shouldShowLoading || isManual) setIsRefreshing(true);
     if (pageNum > 0) setIsLoadingMore(true);
@@ -69,12 +65,14 @@ export default function HomePage() {
       const from = pageNum * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
       const oppositeGender = profile.gender === 'male' ? 'female' : profile.gender === 'female' ? 'male' : null;
+      const blockedList = [...(profile.blocking || []), ...(profile.blocked_by || [])];
 
       let query = supabase
         .from('users')
         .select('uid, name, photo_url, country, dob, is_verified, updated_at')
         .eq('onboarding_complete', true)
         .is('is_deleted', false)
+        .not('uid', 'in', `(${[currentUser?.id, ...blockedList].join(',')})`)
         .order('updated_at', { ascending: false })
         .range(from, to);
 
@@ -102,7 +100,6 @@ export default function HomePage() {
              const uniqueNew = filtered.filter(u => !existingIds.has(u.uid));
              return [...prev, ...uniqueNew];
           });
-          // Update global cache as well
           cachedUsers = [...cachedUsers, ...filtered.filter(u => !new Set(cachedUsers.map(x => u.uid)).has(u.uid))];
         }
         
@@ -120,7 +117,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
-      supabase.from('users').select('uid, gender, country, onboarding_complete').eq('uid', currentUser.id).single()
+      supabase.from('users').select('*').eq('uid', currentUser.id).single()
         .then(({ data }) => {
           if (data?.onboarding_complete) {
             setProfile(data);
@@ -133,7 +130,6 @@ export default function HomePage() {
 
   useEffect(() => {
     if (profile && !hasFetched.current) {
-      // Background refresh even if we have cache
       fetchUsers(0, false, activeTab);
       hasFetched.current = true;
     }
@@ -172,7 +168,6 @@ export default function HomePage() {
     cachedTab = tab;
     setPage(0);
     cachedPage = 0;
-    // When switching tabs, we clear local and cache for that view to fetch fresh
     cachedUsers = [];
     setUsers([]);
     fetchUsers(0, true, tab);
@@ -227,11 +222,10 @@ export default function HomePage() {
           <>
             <div className="grid grid-cols-2 gap-2.5">
               {users.map((u) => (
-                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.35] rounded-lg shadow-lg bg-gray-50 active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
+                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.25] rounded-lg shadow-lg bg-gray-50 active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
                   <Image src={`${u.photo_url}?t=${u.updated_at}`} alt={u.name} fill className="object-cover" sizes="50vw" priority />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                   
-                  {/* TEXT CHAT BUTTON TOP RIGHT */}
                   <Button 
                     className="absolute top-2 right-2 rounded-full h-7 px-4 bg-[#00A2FF]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest shadow-xl z-20 active:scale-90 border border-white/20" 
                     onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}
