@@ -11,8 +11,8 @@ import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 
 /**
- * @fileOverview Cinematic Welcome Page with Supabase Auth Gates.
- * Updated to remove the manual cache clearing button for a cleaner UI.
+ * @fileOverview Cinematic Welcome Page.
+ * Uses router.replace() for session handling to keep auth pages out of the back-stack.
  */
 export default function WelcomePage() {
   const [loading, setLoading] = useState(false)
@@ -22,6 +22,7 @@ export default function WelcomePage() {
 
   useEffect(() => {
     if (isInitialized && !authLoading && user) {
+      // Use replace to ensure they can't "back" into the welcome screen
       router.replace("/")
     }
   }, [user, isInitialized, authLoading, router])
@@ -29,9 +30,7 @@ export default function WelcomePage() {
   const handleGoogleLogin = async () => {
     setLoading(true)
     try {
-      // REDIRECT TO ROOT: Ensures Supabase captures the session before routing
       const redirectTo = typeof window !== 'undefined' ? window.location.origin : 'https://qivo-five.vercel.app';
-
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

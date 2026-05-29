@@ -10,6 +10,11 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { ChevronLeft, Mail, Loader2, ShieldCheck } from "lucide-react"
 
+/**
+ * @fileOverview Unified Auth Page.
+ * Updated to use router.replace() for all successful auth actions to prevent 
+ * back-button navigation into the auth stack once logged in.
+ */
 export default function UnifiedAuthPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -40,7 +45,8 @@ export default function UnifiedAuthPage() {
       if (error) throw error
       
       toast({ title: "Welcome Back!" })
-      router.push("/")
+      // Use replace to remove auth from history stack
+      router.replace("/")
     } catch (error: any) {
       console.error("[Login Error]:", error.message)
       toast({ variant: "destructive", title: "Login failed", description: error.message })
@@ -52,9 +58,7 @@ export default function UnifiedAuthPage() {
   const handleGoogleLogin = async () => {
     setSocialLoading(true)
     try {
-      // REDIRECT TO ROOT: Let root logic handle /home vs /fastonboard
       const redirectTo = window.location.origin;
-
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -86,8 +90,9 @@ export default function UnifiedAuthPage() {
       if (signUpError) throw signUpError
       
       if (data.user) {
-        toast({ title: "Account Created", description: "Welcome to QIVO! Let's set up your profile." })
-        router.push("/fastonboard")
+        toast({ title: "Account Created", description: "Welcome! Let's set up your profile." })
+        // Use replace to ensure user can't "back" into registration
+        router.replace("/fastonboard")
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Registration failed", description: error.message })
@@ -102,7 +107,7 @@ export default function UnifiedAuthPage() {
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={() => router.push("/")} 
+          onClick={() => router.back()} 
           className="rounded-full"
         >
           <ChevronLeft className="w-6 h-6 text-black" />
