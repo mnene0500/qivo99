@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
@@ -106,9 +107,11 @@ export default function MePage() {
   const isSpecial = !!profile?.is_special_user
   const isMerchant = !!(profile?.is_coin_seller || isOwner || isSpecial)
   const isAgent = !!profile?.is_agent
-  const isFemale = profile?.gender === 'female'
-  const isAgencyMember = profile?.agency_status === 'approved'
   const isVerified = !!profile?.is_verified
+  
+  // POLICY: Agency option appears for Kenyan Female users only
+  const isKenyanFemale = profile?.gender === 'female' && profile?.country === 'Kenya'
+  const isAgencyMember = profile?.agency_status === 'approved'
   
   const displayPhoto = profile?.photo_url || "https://picsum.photos/seed/qivo/400/400"
   const cacheBust = profile?.updated_at ? new Date(profile.updated_at).getTime() : Date.now()
@@ -213,7 +216,7 @@ export default function MePage() {
             </section>
           )}
 
-          {isFemale && (
+          {isKenyanFemale && (
             <section className="space-y-3">
               <h3 className="text-[10px] font-black text-gray-400 tracking-widest ml-1">Agency Access</h3>
               <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
@@ -260,7 +263,7 @@ export default function MePage() {
                           <div className="pt-4 border-t mt-4 space-y-4">
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400">Agency Name</label>
-                              <Input placeholder="Enter name" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} className="rounded-xl h-12 font-bold" />
+                              <Input placeholder="Enter Name" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} className="rounded-xl h-12 font-bold" />
                             </div>
                             <Button onClick={handleCreateAgency} disabled={isProcessing || !agencyName} variant="outline" className="w-full h-12 rounded-xl border-purple-200 text-purple-600 font-black text-[10px] tracking-widest">Create Agency</Button>
                           </div>
