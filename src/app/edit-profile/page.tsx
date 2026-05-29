@@ -92,7 +92,6 @@ export default function EditProfilePage() {
   const handleSave = async () => {
     if (!user?.id) return
 
-    // VALIDATION: Bio is compulsory
     if (!formData.interests || formData.interests.trim().length < 5) {
       toast({ variant: "destructive", title: "Bio is Compulsory", description: "Please write a short bio about yourself." });
       return;

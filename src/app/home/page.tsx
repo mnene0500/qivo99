@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
@@ -111,7 +112,6 @@ export default function HomePage() {
     }
   }, [currentUser?.id, profile, activeTab]);
 
-  // INITIAL LOAD
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
       supabase.from('users').select('uid, gender, country, onboarding_complete').eq('uid', currentUser.id).single()
@@ -134,7 +134,6 @@ export default function HomePage() {
     }
   }, [profile, fetchUsers, activeTab]);
 
-  // INFINITE SCROLL OBSERVER
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -152,7 +151,6 @@ export default function HomePage() {
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, isRefreshing, page, fetchUsers, profile]);
 
-  // REFRESH EVENT LISTENERS (Single Click Refresh)
   useEffect(() => {
     const handleRefresh = (e: any) => {
       if (e.detail.path === '/home') {
@@ -202,12 +200,12 @@ export default function HomePage() {
         </button>
       </div>
 
-      <div className="sticky top-0 z-40 bg-[#00A2FF] px-6 py-4 flex items-center justify-between border-b border-white/10 shadow-md">
+      <div className="sticky top-0 z-40 bg-[#00A2FF] px-6 py-2 flex items-center justify-between border-b border-white/10 shadow-md">
         <div className="flex items-center gap-8">
           {(['Recommend', 'Nearby'] as const).map((tab) => (
-            <button key={tab} onClick={() => handleTabChange(tab)} className={cn("text-[13px] font-black transition-all relative pb-1", activeTab === tab ? "text-white" : "text-white/40")}>
+            <button key={tab} onClick={() => handleTabChange(tab)} className={cn("text-[13px] font-black transition-all relative py-2", activeTab === tab ? "text-white" : "text-white/40")}>
               {tab}
-              {activeTab === tab && <div className="absolute -bottom-1 left-0 right-0 h-1 bg-white rounded-full animate-in fade-in" />}
+              {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-white rounded-full animate-in fade-in" />}
             </button>
           ))}
         </div>
@@ -243,12 +241,11 @@ export default function HomePage() {
               ))}
             </div>
             
-            {/* INFINITE SCROLL SENTINEL */}
             <div ref={observerTarget} className="h-20 flex items-center justify-center py-10">
               {hasMore && (
                 <div className="flex items-center gap-2 text-gray-400">
                   <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" />
-                  <span className="text-[10px] font-bold tracking-widest">Searching more users...</span>
+                  <span className="text-[10px] font-bold tracking-widest">Searching...</span>
                 </div>
               )}
             </div>

@@ -1,20 +1,17 @@
+
 "use client"
 
 import { use, useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, MessageSquare, MoreHorizontal, BadgeCheck, Ban, Flag, MapPin, Quote, Globe, GraduationCap, Heart, Loader2, Copy, Check } from "lucide-react"
+import { ChevronLeft, MessageSquare, MoreHorizontal, BadgeCheck, Ban, Flag, MapPin, Quote, Globe, GraduationCap, Heart, Loader2, Copy, Check, X } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useUser } from "@/firebase/auth/use-user"
 import { useToast } from "@/hooks/use-toast"
 
-/**
- * @fileOverview User Detail Profile with Strictly Fixed Bottom Action.
- * Updated to Title Case.
- */
 export default function UserDetailPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = use(params)
   const router = useRouter()
@@ -24,6 +21,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [idCopied, setIdCopied] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.from('users').select('*').eq('uid', userId).single().then(({ data }) => {
@@ -65,7 +63,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
     <div className="flex flex-col h-screen w-full bg-white relative overflow-hidden">
       <div className="flex-1 w-full overflow-y-auto no-scrollbar pb-32">
         <div className="relative h-[55vh] w-full overflow-hidden shrink-0">
-          <Image src={profile.photo_url} alt={profile.name} fill className="object-cover" priority sizes="100vw" />
+          <Image src={profile.photo_url} alt={profile.name} fill className="object-cover cursor-pointer" priority sizes="100vw" onClick={() => setSelectedImage(profile.photo_url)} />
           <div className="absolute top-12 inset-x-0 px-6 flex justify-between items-center z-20">
             <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full bg-white/10 backdrop-blur-xl text-white w-10 h-10 border border-white/20 shadow-2xl active:scale-90 transition-all"><ChevronLeft className="w-6 h-6" /></Button>
             {!profile.is_owner && !profile.is_admin && (
@@ -119,7 +117,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
               <div className="flex items-center justify-between px-1"><span className="text-[10px] font-bold text-gray-400">Visual Gallery</span><span className="text-[9px] font-bold text-gray-300">{allPhotos.length} Photos</span></div>
               <div className="grid grid-cols-4 gap-2">
                 {allPhotos.map((url, i) => (
-                  <div key={url} className="relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-gray-50 shadow-sm active:scale-95 transition-all"><Image src={url} alt={`P${i}`} fill className="object-cover" sizes="20vw" /></div>
+                  <div key={url} className="relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-gray-50 shadow-sm active:scale-95 transition-all" onClick={() => setSelectedImage(url)}>
+                    <Image src={url} alt={`P${i}`} fill className="object-cover" sizes="20vw" />
+                  </div>
                 ))}
               </div>
             </section>
@@ -142,6 +142,17 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
           Send Message
         </Button>
       </div>
+
+      {selectedImage && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center animate-in fade-in duration-300" onClick={() => setSelectedImage(null)}>
+          <button className="absolute top-12 right-6 w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20 active:scale-90 transition-transform">
+            <X className="w-6 h-6" />
+          </button>
+          <div className="relative w-full h-[80vh]">
+            <Image src={selectedImage} alt="Fullscreen" fill className="object-contain" sizes="100vw" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

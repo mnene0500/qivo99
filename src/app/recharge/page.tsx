@@ -1,14 +1,16 @@
+
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Coins, ShieldCheck, Loader2, MessageSquare, ExternalLink, Zap, Check, History } from "lucide-react"
+import { ChevronLeft, Coins, ShieldCheck, Loader2, MessageSquare, ExternalLink, Zap, Check, History, AlertCircle } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { useToast } from "@/hooks/use-toast"
 import { initiatePesaPalPayment } from "@/app/actions/payment-actions"
 import { cn } from "@/lib/utils"
 import { useBalance } from "@/lib/providers/BalanceProvider"
+import { supabase } from "@/lib/supabase"
 
 const PACKAGES = [
   { id: "p1", label: "10", coins: 10, price: 1 },
@@ -27,12 +29,28 @@ export default function RechargePage() {
   
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [profile, setProfile] = useState<any>(null)
+  const [loadingProfile, setLoadingProfile] = useState(true)
+
+  useEffect(() => {
+    if (!user?.id) return
+    supabase.from('users').select('country').eq('uid', user.id).single().then(({ data }) => {
+      setProfile(data)
+      setLoadingProfile(false)
+    })
+  }, [user?.id])
 
   const selectedPackage = PACKAGES.find(p => p.id === selectedId)
+  const isPesaPalCountry = profile && !['Nigeria', 'Ghana', 'South Africa'].includes(profile.country)
 
   const handleRecharge = async () => {
     if (!user) {
       router.push("/auth")
+      return
+    }
+
+    if (!isPesaPalCountry) {
+      toast({ variant: "destructive", title: "Gateway Restricted", description: "Use Certified Merchants for your region." })
       return
     }
 
@@ -77,81 +95,102 @@ export default function RechargePage() {
             <p className="text-[10px] font-bold text-gray-400 tracking-widest">Available Coins</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          {PACKAGES.map((pkg) => (
-            <button 
-              key={pkg.id} 
-              onClick={() => setSelectedId(pkg.id)}
-              className={cn(
-                "relative group flex flex-col items-center justify-center p-4 rounded-3xl border-2 transition-all active:scale-95 h-32",
-                selectedId === pkg.id 
-                  ? "border-[#00A2FF] bg-blue-50/50 shadow-lg shadow-blue-100" 
-                  : "border-gray-50 bg-gray-50/30 hover:border-gray-100"
-              )}
-            >
-              {selectedId === pkg.id && (
-                <div className="absolute -top-2 -right-1 bg-[#00A2FF] text-white p-1 rounded-full shadow-lg">
-                  <Check className="w-3 h-3" />
+        {isPesaPalCountry ? (
+          <div className="grid grid-cols-3 gap-3">
+            {PACKAGES.map((pkg) => (
+              <button 
+                key={pkg.id} 
+                onClick={() => setSelectedId(pkg.id)}
+                className={cn(
+                  "relative group flex flex-col items-center justify-center p-4 rounded-3xl border-2 transition-all active:scale-95 h-32",
+                  selectedId === pkg.id 
+                    ? "border-[#00A2FF] bg-blue-50/50 shadow-lg shadow-blue-100" 
+                    : "border-gray-50 bg-gray-50/30 hover:border-gray-100"
+                )}
+              >
+                {selectedId === pkg.id && (
+                  <div className="absolute -top-2 -right-1 bg-[#00A2FF] text-white p-1 rounded-full shadow-lg">
+                    <Check className="w-3 h-3" />
+                  </div>
+                )}
+                
+                <div className="flex flex-col items-center gap-1 mb-2">
+                  <div className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center mb-1 transition-colors",
+                    selectedId === pkg.id ? "bg-[#00A2FF] text-white" : "bg-white shadow-sm text-yellow-500"
+                  )}>
+                    <Coins className="w-4 h-4" />
+                  </div>
+                  <span className="text-sm font-black text-black leading-none">{pkg.label}</span>
+                  <span className="text-[8px] font-bold text-gray-400">Coins</span>
                 </div>
-              )}
-              
-              <div className="flex flex-col items-center gap-1 mb-2">
-                <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center mb-1 transition-colors",
-                  selectedId === pkg.id ? "bg-[#00A2FF] text-white" : "bg-white shadow-sm text-yellow-500"
-                )}>
-                  <Coins className="w-4 h-4" />
+                
+                <div className="mt-auto">
+                  <span className={cn(
+                    "text-[10px] font-black",
+                    selectedId === pkg.id ? "text-[#00A2FF]" : "text-gray-400"
+                  )}>KES {pkg.price}</span>
                 </div>
-                <span className="text-sm font-black text-black leading-none">{pkg.label}</span>
-                <span className="text-[8px] font-bold text-gray-400">Coins</span>
-              </div>
-              
-              <div className="mt-auto">
-                <span className={cn(
-                  "text-[10px] font-black",
-                  selectedId === pkg.id ? "text-[#00A2FF]" : "text-gray-400"
-                )}>KES {pkg.price}</span>
-              </div>
-            </button>
-          ))}
-        </div>
+              </button>
+            ))}
+          </div>
+        ) : !loadingProfile ? (
+          <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 flex flex-col items-center text-center gap-4">
+            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-[#00A2FF] shadow-sm">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-black text-black">Local Recharge Only</h3>
+              <p className="text-[10px] font-medium text-gray-500 leading-relaxed">PesaPal is restricted in {profile?.country}. Please contact a Certified Merchant below to buy coins.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="h-32 flex items-center justify-center"><Loader2 className="animate-spin text-gray-200" /></div>
+        )}
 
         <div className="space-y-4">
           <Button 
             onClick={() => router.push('/coin-sellers')}
             variant="ghost"
-            className="w-full h-14 rounded-2xl bg-gray-50 flex items-center justify-between px-6 text-black font-bold text-xs hover:bg-gray-100 transition-all border border-gray-100"
+            className="w-full h-16 rounded-2xl bg-gray-900 flex items-center justify-between px-6 text-white font-bold hover:bg-black transition-all shadow-xl"
           >
             <div className="flex items-center gap-3">
-              <div className="bg-[#00A2FF]/10 p-2 rounded-lg">
-                <MessageSquare className="w-4 h-4 text-[#00A2FF]" />
+              <div className="bg-white/10 p-2 rounded-lg">
+                <MessageSquare className="w-4 h-4 text-yellow-400 fill-current" />
               </div>
-              <span className="tracking-tight text-[10px] font-black">Offline Merchants</span>
+              <div className="text-left">
+                <span className="block text-[11px] font-black uppercase tracking-widest leading-none">Contact Merchants</span>
+                <span className="text-[8px] opacity-60 font-bold">Fast Local Payment</span>
+              </div>
             </div>
-            <ExternalLink className="w-3.5 h-3.5 opacity-30" />
+            <ExternalLink className="w-4 h-4 text-yellow-400" />
           </Button>
 
-          <div className="flex items-center justify-center gap-2 text-gray-300 py-4">
-            <ShieldCheck className="w-4 h-4" />
-            <span className="text-[9px] font-black tracking-[0.2em]">Secure PesaPal Channel</span>
-          </div>
+          {isPesaPalCountry && (
+            <div className="flex items-center justify-center gap-2 text-gray-300 py-4">
+              <ShieldCheck className="w-4 h-4" />
+              <span className="text-[9px] font-black tracking-[0.2em]">Secure PesaPal Channel</span>
+            </div>
+          )}
         </div>
       </main>
 
-      <footer className="fixed bottom-0 inset-x-0 p-6 bg-white/90 backdrop-blur-md border-t border-gray-50 z-40 flex flex-col gap-4">
-        <Button 
-          onClick={handleRecharge}
-          disabled={isProcessing || !selectedId}
-          className="w-full h-16 rounded-full bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all"
-        >
-          {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 fill-current text-yellow-300" />
-              {selectedPackage ? `Recharge Now (KES ${selectedPackage.price})` : "Select a Package"}
-            </div>
-          )}
-        </Button>
-      </footer>
+      {isPesaPalCountry && (
+        <footer className="fixed bottom-0 inset-x-0 p-6 bg-white/90 backdrop-blur-md border-t border-gray-50 z-40 flex flex-col gap-4">
+          <Button 
+            onClick={handleRecharge}
+            disabled={isProcessing || !selectedId}
+            className="w-full h-16 rounded-full bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all"
+          >
+            {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 fill-current text-yellow-300" />
+                {selectedPackage ? `Recharge Now (KES ${selectedPackage.price})` : "Select a Package"}
+              </div>
+            )}
+          </Button>
+        </footer>
+      )}
     </div>
   )
 }
