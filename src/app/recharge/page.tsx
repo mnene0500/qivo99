@@ -32,12 +32,12 @@ import {
 
 const PACKAGES = [
   { id: "p1", label: "500", coins: 500, priceKes: 80 },
-  { id: "p2", label: "1K", coins: 1000, priceKes: 120, popular: true },
-  { id: "p3", label: "5K", coins: 5000, priceKes: 600 },
-  { id: "p4", label: "7K", coins: 7000, priceKes: 800 },
-  { id: "p5", label: "10K", coins: 10000, priceKes: 1000 },
-  { id: "p6", label: "15K", coins: 15000, priceKes: 1500 },
-  { id: "p7", label: "20K", coins: 20000, priceKes: 2000 },
+  { id: "p2", label: "1000", coins: 1000, priceKes: 120, popular: true },
+  { id: "p3", label: "5000", coins: 5000, priceKes: 600 },
+  { id: "p4", label: "7000", coins: 7000, priceKes: 800 },
+  { id: "p5", label: "10000", coins: 10000, priceKes: 1000 },
+  { id: "p6", label: "15000", coins: 15000, priceKes: 1500 },
+  { id: "p7", label: "20000", coins: 20000, priceKes: 2000 },
 ]
 
 const RATES = {
@@ -67,7 +67,6 @@ export default function RechargePage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [profile, setProfile] = useState<any>(null)
-  const [loadingProfile, setLoadingProfile] = useState(true)
   const [manualCountry, setManualCountry] = useState<string | null>(null)
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false)
 
@@ -75,7 +74,6 @@ export default function RechargePage() {
     if (!user?.id) return
     supabase.from('users').select('country').eq('uid', user.id).single().then(({ data }) => {
       setProfile(data)
-      setLoadingProfile(false)
     })
   }, [user?.id])
 
@@ -122,8 +120,9 @@ export default function RechargePage() {
   }
 
   return (
-    <div className="flex-1 bg-white min-h-screen flex flex-col select-none relative">
-      <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
+    <div className="flex flex-col min-h-full bg-white select-none relative">
+      {/* HEADER: STICKY LOCK */}
+      <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-[60]">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black">
             <ChevronLeft className="w-6 h-6" />
@@ -165,7 +164,8 @@ export default function RechargePage() {
         </Button>
       </header>
 
-      <main className="flex-1 p-5 space-y-8 pb-64">
+      {/* SCROLLABLE CONTENT */}
+      <main className="flex-1 p-5 space-y-8">
         <div className="flex flex-col items-center gap-2 pt-4">
             <div className="bg-yellow-50 px-6 py-3 rounded-full flex items-center gap-3 border border-yellow-100 shadow-sm">
                 <Coins className='w-6 h-6 text-yellow-500 fill-yellow-500'/>
@@ -185,7 +185,7 @@ export default function RechargePage() {
                 key={pkg.id} 
                 onClick={() => setSelectedId(pkg.id)}
                 className={cn(
-                  "relative group flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all active:scale-95 h-32",
+                  "relative flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all active:scale-95 h-32",
                   selectedId === pkg.id 
                     ? "border-[#00A2FF] bg-blue-50/50 shadow-lg shadow-blue-100" 
                     : "border-gray-50 bg-gray-50/30 hover:border-gray-100"
@@ -219,7 +219,7 @@ export default function RechargePage() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 pb-20">
           <Button 
             onClick={() => router.push('/coin-sellers')}
             variant="ghost"
@@ -246,7 +246,8 @@ export default function RechargePage() {
         </div>
       </main>
 
-      <footer className="fixed bottom-0 inset-x-0 p-6 bg-white/95 backdrop-blur-xl border-t border-black/5 z-50 flex flex-col gap-4 pb-[env(safe-area-inset-bottom,24px)]">
+      {/* FOOTER: STICKY LOCK */}
+      <footer className="sticky bottom-0 inset-x-0 p-6 bg-white/95 backdrop-blur-xl border-t border-black/5 z-[60] flex flex-col gap-4 pb-[env(safe-area-inset-bottom,24px)] shadow-[0_-10px_30px_rgba(0,0,0,0.04)]">
         <Button 
           onClick={handleRecharge}
           disabled={isProcessing || !selectedId}

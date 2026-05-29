@@ -142,14 +142,16 @@ export default function EditProfilePage() {
   if (loading) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
 
   return (
-    <div className="flex-1 bg-white min-h-screen flex flex-col relative select-none">
-      <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
+    <div className="flex flex-col min-h-full bg-white relative select-none">
+      {/* HEADER: STICKY LOCK */}
+      <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-[60]">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <h1 className="text-sm font-black text-black uppercase tracking-widest">Edit Profile</h1>
         <div className="w-10" />
       </header>
 
-      <main className="flex-1 p-6 space-y-8 overflow-y-auto no-scrollbar pb-40">
+      {/* SCROLLABLE CONTENT */}
+      <main className="flex-1 p-6 space-y-8 pb-32">
         <div className="flex flex-col items-center">
           <div className="relative group cursor-pointer" onClick={() => { setTargetPhotoIndex('profile'); fileInputRef.current?.click(); }}>
             <Avatar className="w-32 h-32 border-none shadow-2xl overflow-hidden bg-gray-100">
@@ -241,7 +243,8 @@ export default function EditProfilePage() {
         </div>
       </main>
 
-      <footer className="fixed bottom-0 inset-x-0 p-6 bg-white/95 backdrop-blur-xl border-t border-black/5 z-[60] pb-[env(safe-area-inset-bottom,24px)]">
+      {/* FOOTER: STICKY LOCK */}
+      <footer className="sticky bottom-0 inset-x-0 p-6 bg-white/95 backdrop-blur-xl border-t border-black/5 z-[60] pb-[env(safe-area-inset-bottom,24px)] shadow-[0_-10px_30px_rgba(0,0,0,0.04)]">
         <Button 
           onClick={handleSave} 
           disabled={saving} 
