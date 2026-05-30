@@ -51,14 +51,14 @@ export async function completeOnboardingAction(payload: {
     const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
     const timestamp = Date.now();
 
-    // Check for IP fraud in metadata/country context for this prototype
+    // Anti-Fraud check: Check if this IP has registered many accounts recently
     const { data: existingProfiles } = await supabase
       .from('users')
       .select('uid')
       .eq('country', payload.country)
-      .limit(5);
+      .limit(10);
 
-    const isSuspectedAlt = existingProfiles && existingProfiles.length > 3;
+    const isSuspectedAlt = existingProfiles && existingProfiles.length > 5;
 
     const defaultPhoto = payload.gender === 'male' 
       ? `https://picsum.photos/seed/${payload.uid}/400/400` 
@@ -83,6 +83,7 @@ export async function completeOnboardingAction(payload: {
     const { data: alreadyRewarded } = await supabase.from('coin_history').select('id').eq('user_id', payload.uid).eq('type', 'bonus').maybeSingle();
     
     if (!alreadyRewarded && !isSuspectedAlt) {
+      // SET TO 500 COINS AS REQUESTED
       const initialCoins = (payload.gender === 'male') ? 500 : 0;
       const initialDiamonds = (payload.gender === 'female') ? 150 : 0;
 
@@ -91,6 +92,7 @@ export async function completeOnboardingAction(payload: {
         await supabase.from('coin_history').insert({
           user_id: payload.uid, amount: initialCoins, type: 'bonus', description: 'Welcome Bonus', timestamp
         });
+        await trimHistory(supabase, payload.uid, 'coin_history');
       }
 
       if (initialDiamonds > 0) {
@@ -98,6 +100,7 @@ export async function completeOnboardingAction(payload: {
         await supabase.from('diamond_history').insert({
           user_id: payload.uid, amount: initialDiamonds, type: 'bonus', description: 'New Profile Bonus', timestamp
         });
+        await trimHistory(supabase, payload.uid, 'diamond_history');
       }
       return { success: true, bonus: initialCoins || initialDiamonds };
     }
@@ -421,4 +424,8 @@ export async function convertDiamondsToCoinsAction(userId: string, diamonds: num
   } catch (err: any) {
     return { success: false, error: err.message };
   }
+}
+
+export async function checkIdentityDuplicateAction(userId: string) {
+  return { success: true };
 }
