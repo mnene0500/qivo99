@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, Suspense, useCallback, useRef } from "react"
@@ -10,8 +11,17 @@ import { Send, ChevronLeft, User, Gift, Trash2, MoreVertical, BadgeCheck, Loader
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
-import { sendGiftAction, clearChatAction, sendMessageAction, markChatAsReadAction } from "@/app/actions/matchflow-actions"
-import { useBalance } from "@/lib/providers/BalanceProvider"
+import { clearChatAction, sendMessageAction, markChatAsReadAction } from "@/app/actions/matchflow-actions"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Message {
   id: string | number
@@ -33,8 +43,6 @@ interface ChatSummary {
   unread_count: number
 }
 
-const PAGE_SIZE = 20;
-
 function ChatsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -49,10 +57,13 @@ function ChatsContent() {
   const [messages, setMessages] = useState<Message[]>([])
   const [partnerProfile, setPartnerProfile] = useState<any>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
+  const [chatToDelete, setChatToDelete] = useState<string | null>(null)
+
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null)
 
   // 1. Fetch Chat Summaries
   const fetchSummaries = useCallback(async () => {
-    if (!currentUser?.id || loadingSummaries) return
+    if (!currentUser?.id) return
     setLoadingSummaries(true)
 
     try {
@@ -67,11 +78,17 @@ function ChatsContent() {
         return
       }
 
-      const partnerIds = chatsData.map(c => c.participant_ids.find((id: string) => id !== currentUser.id));
+      // Filter out chats cleared by the current user
+      const filteredChats = chatsData.filter(c => {
+        const clearedAt = (c.cleared_at as Record<string, number>)?.[currentUser.id] || 0;
+        return (c.last_message_at || 0) > clearedAt;
+      });
+
+      const partnerIds = filteredChats.map(c => c.participant_ids.find((id: string) => id !== currentUser.id));
       const { data: profiles } = await supabase.from('users').select('uid, name, photo_url, is_verified').in('uid', partnerIds);
       const profileMap = new Map(profiles?.map(p => [p.uid, p]));
 
-      const enhanced: ChatSummary[] = chatsData.map(c => {
+      const enhanced: ChatSummary[] = filteredChats.map(c => {
         const pId = c.participant_ids.find((id: string) => id !== currentUser.id);
         const p = profileMap.get(pId);
         const mySeenAt = (c.last_seen_at as Record<string, number>)?.[currentUser.id] || 0;
@@ -93,7 +110,7 @@ function ChatsContent() {
     }
   }, [currentUser?.id]);
 
-  // 2. Fetch Chat Details (Partner Profile + Messages)
+  // 2. Fetch Chat Details
   useEffect(() => {
     if (!startWithId || !currentUser?.id) return;
 
@@ -101,26 +118,29 @@ function ChatsContent() {
     setChatId(cid);
     setLoadingDetail(true);
 
-    // Fetch Partner
+    // Fetch Partner Immediately for Name display
     supabase.from('users').select('*').eq('uid', startWithId).single().then(({ data }) => {
       setPartnerProfile(data);
     });
 
-    // Fetch Messages
-    supabase.from('messages')
-      .select('*')
-      .eq('chat_id', cid)
-      .order('timestamp', { ascending: false })
-      .limit(50)
-      .then(({ data }) => {
-        setMessages(data || []);
-        setLoadingDetail(false);
-      });
+    // Fetch Messages relative to cleared timestamp
+    supabase.from('chats').select('cleared_at').eq('id', cid).maybeSingle().then(({ data: chatMeta }) => {
+      const clearedAt = (chatMeta?.cleared_at as Record<string, number>)?.[currentUser.id] || 0;
+      
+      supabase.from('messages')
+        .select('*')
+        .eq('chat_id', cid)
+        .gt('timestamp', clearedAt)
+        .order('timestamp', { ascending: false })
+        .limit(50)
+        .then(({ data }) => {
+          setMessages(data || []);
+          setLoadingDetail(false);
+        });
+    });
 
-    // Mark Read
     markChatAsReadAction(currentUser.id, cid);
 
-    // Real-time listener
     const channel = supabase.channel(`chat-msgs-${cid}`)
       .on('postgres_changes', { event: 'INSERT', table: 'messages', filter: `chat_id=eq.${cid}` }, (payload) => {
         setMessages(prev => [payload.new as any, ...prev.filter(m => m.id !== (payload.new as any).id)]);
@@ -152,6 +172,29 @@ function ChatsContent() {
     }
   };
 
+  const handleClearChat = async () => {
+    if (!chatToDelete || !currentUser?.id) return
+    const res = await clearChatAction(currentUser.id, chatToDelete)
+    if (res.success) {
+      setChatSummaries(prev => prev.filter(s => s.id !== chatToDelete))
+      toast({ title: "Chat cleared" })
+    }
+    setChatToDelete(null)
+  }
+
+  const onTouchStart = (cid: string) => {
+    longPressTimer.current = setTimeout(() => {
+      setChatToDelete(cid)
+    }, 800)
+  }
+
+  const onTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
   if (!isInitialized) return null;
 
   if (!startWithId) return (
@@ -166,7 +209,16 @@ function ChatsContent() {
           </div>
         ) : (
           chatSummaries.map(s => (
-            <div key={s.id} onClick={() => router.push(`/chats?startWith=${s.partner_id}`)} className="p-4 flex items-center gap-4 active:bg-gray-50 border-b border-gray-50 transition-colors cursor-pointer">
+            <div 
+              key={s.id} 
+              onMouseDown={() => onTouchStart(s.id)}
+              onMouseUp={onTouchEnd}
+              onMouseLeave={onTouchEnd}
+              onTouchStart={() => onTouchStart(s.id)}
+              onTouchEnd={onTouchEnd}
+              onClick={() => router.push(`/chats?startWith=${s.partner_id}`)} 
+              className="p-4 flex items-center gap-4 active:bg-gray-50 border-b border-gray-50 transition-colors cursor-pointer"
+            >
               <div className="relative">
                 <Avatar className="w-14 h-14 border"><AvatarImage src={s.partner_photo} /><AvatarFallback>{s.partner_name[0]}</AvatarFallback></Avatar>
                 {s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm">{s.unread_count}</div>}
@@ -183,6 +235,21 @@ function ChatsContent() {
         )}
         {loadingSummaries && <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#00A2FF]" /></div>}
       </main>
+
+      <AlertDialog open={!!chatToDelete} onOpenChange={(open) => !open && setChatToDelete(null)}>
+        <AlertDialogContent className="rounded-3xl p-8 border-none shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-black text-center uppercase tracking-tight">Delete Conversation?</AlertDialogTitle>
+            <AlertDialogDescription className="text-center text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              This will clear the chat history for you. The other person will still see the messages.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-3 mt-4">
+            <AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearChat} className="h-12 rounded-xl bg-red-500 font-black text-[10px] uppercase">Clear History</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 
@@ -196,7 +263,7 @@ function ChatsContent() {
             <AvatarFallback>{partnerProfile?.name?.[0] || '?'}</AvatarFallback>
           </Avatar>
           <div className="flex flex-col min-w-0">
-            <p className="font-black text-sm truncate">{partnerProfile?.name || 'Loading...'}</p>
+            <p className="font-black text-sm truncate">{partnerProfile?.name || '...'}</p>
             {partnerProfile && <p className="text-[8px] font-bold text-[#00A2FF] uppercase tracking-widest">Active Now</p>}
           </div>
         </div>

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useRef, useMemo } from "react"
@@ -95,10 +96,13 @@ export default function SpinToWinPage() {
           </div>
 
           <div 
-            className="w-full h-full rounded-full border-[8px] border-amber-900/50 shadow-[0_0_80px_rgba(245,158,11,0.15)] bg-black overflow-hidden relative transition-transform duration-[5000ms] cubic-bezier(0.1, 0, 0.1, 1)"
-            style={{ transform: `rotate(-${rotation}deg)` }}
+            className="w-full h-full rounded-full border-[8px] border-amber-900/50 shadow-[0_0_80px_rgba(245,158,11,0.15)] bg-black overflow-hidden relative"
           >
-            <svg viewBox="0 0 100 100" className="w-full h-full">
+            <svg 
+              viewBox="0 0 100 100" 
+              className="w-full h-full transition-transform duration-[5000ms] cubic-bezier(0.1, 0, 0.1, 1)"
+              style={{ transform: `rotate(-${rotation}deg)` }}
+            >
               {currentPrizes.map((prize, i) => {
                 const angle = i * SECTOR_ANGLE
                 return (
@@ -109,7 +113,7 @@ export default function SpinToWinPage() {
                 )
               })}
             </svg>
-            <div className="absolute inset-[42%] bg-amber-600 rounded-full border-2 border-amber-900 shadow-inner flex items-center justify-center">
+            <div className="absolute inset-[42%] bg-amber-600 rounded-full border-2 border-amber-900 shadow-inner flex items-center justify-center z-20">
               <Star className="w-4 h-4 text-white fill-current" />
             </div>
           </div>

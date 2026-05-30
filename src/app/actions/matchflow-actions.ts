@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -129,7 +130,6 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
     const isFree = sender?.is_owner || sender?.is_special_user || sender?.is_coin_seller || recipient?.is_special_user || recipient?.is_coin_seller || recipient?.is_owner;
 
     if (sender?.gender === 'male' && !isFree) {
-      // Use RPC to atomatically check and deduct
       const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: payload.senderId, p_amount: -cost });
       if (deductErr) return { success: false, error: "insufficient_funds" };
       
@@ -148,10 +148,17 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
 
-    const { error: msgError } = await supabase.from('messages').insert({ chat_id: payload.chatId, text: safeText, sender_id: payload.senderId, timestamp });
+    const { error: msgError } = await supabase.from('messages').insert({ 
+      chat_id: payload.chatId, 
+      text: safeText, 
+      sender_id: payload.senderId, 
+      timestamp 
+    });
+    
     if (msgError) throw msgError;
     return { success: true };
   } catch (err: any) {
+    console.error("[Send Message Error]:", err.message);
     return { success: false, error: "system_error" };
   }
 }
@@ -195,7 +202,7 @@ export async function awardCoinsAction(ownerUid: string, targetUid: string, amou
     }
 
     await supabase.rpc("increment_coins", { p_user_id: targetUid, p_amount: amount });
-    await supabase.from('coin_history').insert({ user_id: targetUid, amount, type: 'awarded', description: `Received from ${owner.is_coin_seller ? 'Merchant' : 'Admin'}`, timestamp: ts });
+    await supabase.from('coin_history').insert({ user_id: targetUid, amount, type: 'awarded', description: `Received from ${owner.is_coin_seller ? 'Coinseller' : 'Admin'}`, timestamp: ts });
     await trimHistory(supabase, targetUid, 'coin_history');
 
     return { success: true, message: `Sent ${amount} coins.` };
@@ -290,7 +297,6 @@ export async function toggleUserRoleAction(ownerUid: string, targetMatchFlowId: 
 export async function deleteUserCompletelyAction(uid: string) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Delete auth entry (this cascades to profiles in public.users if references are set to cascade)
     const { error } = await supabase.auth.admin.deleteUser(uid);
     if (error) throw error;
     return { success: true };
