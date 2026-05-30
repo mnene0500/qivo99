@@ -89,7 +89,7 @@ function ChatsContent() {
         return
       }
 
-      // Filter out chats cleared by the current user
+      // Filter: Show chat if NEW messages exist since clearing
       const filteredChats = chatsData.filter(c => {
         const clearedAt = (c.cleared_at as Record<string, number>)?.[currentUser.id] || 0;
         return (c.last_message_at || 0) > clearedAt;
@@ -141,7 +141,7 @@ function ChatsContent() {
       setPartnerProfile(data);
     });
 
-    // Fetch Messages relative to cleared timestamp (Soft Delete)
+    // Fetch Messages relative to cleared timestamp
     supabase.from('chats').select('cleared_at').eq('id', cid).maybeSingle().then(({ data: chatMeta }) => {
       const clearedAt = (chatMeta?.cleared_at as Record<string, number>)?.[currentUser.id] || 0;
       
@@ -209,7 +209,7 @@ function ChatsContent() {
     const res = await clearChatAction(currentUser.id, chatToDelete)
     if (res.success) {
       setChatSummaries(prev => prev.filter(s => s.id !== chatToDelete))
-      toast({ title: "Chat cleared" })
+      toast({ title: "Chat history cleared" })
     }
     setChatToDelete(null)
   }
@@ -273,7 +273,7 @@ function ChatsContent() {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-black text-center uppercase tracking-tight">Delete Conversation?</AlertDialogTitle>
             <AlertDialogDescription className="text-center text-[10px] font-bold uppercase tracking-widest text-gray-400">
-              This will clear the chat history for you. If you start a chat with this user again, it will be blank.
+              This will clear the chat history for you. It will reappear if you receive a new message.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-3 mt-4">
@@ -312,7 +312,7 @@ function ChatsContent() {
         {loadingDetail && <div className="flex justify-center py-4"><Loader2 className="animate-spin text-gray-300" /></div>}
       </main>
 
-      <footer className="p-4 border-t bg-white shrink-0 pb-[env(safe-area-inset-bottom,16px)]">
+      <footer className="p-4 border-t bg-white shrink-0 mb-[env(safe-area-inset-bottom,0px)]">
         <div className="flex items-center gap-2 max-w-5xl mx-auto w-full">
           <Dialog open={giftOpen} onOpenChange={setGiftOpen}>
             <DialogTrigger asChild>
@@ -350,7 +350,7 @@ function ChatsContent() {
             value={newMessage} 
             onChange={e => setNewMessage(e.target.value)} 
             onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-            className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 outline-none font-medium text-sm" 
+            className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 outline-none font-medium text-sm border border-black/5" 
             placeholder="Type something..." 
           />
           <Button onClick={handleSendMessage} size="icon" disabled={!newMessage.trim()} className="rounded-full h-12 w-12 bg-[#00A2FF] text-white shrink-0 shadow-lg shadow-blue-100">

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { usePathname, useSearchParams } from "next/navigation"
@@ -8,7 +9,7 @@ import { useUser } from "@/firebase/auth/use-user"
 
 /**
  * @fileOverview Viewport-Centric App Shell with Scroll Persistence.
- * Strictly manages hydration state to prevent mismatch errors.
+ * Strictly manages hydration state and route-based scroll caching.
  */
 
 function ShellContent({ children }: { children: React.ReactNode }) {
@@ -29,23 +30,33 @@ function ShellContent({ children }: { children: React.ReactNode }) {
     return navRoutes.includes(pathname || "") && !isChatDetail;
   }, [mounted, user, pathname, isChatDetail]);
 
+  // RESTORE SCROLL ON ROUTE CHANGE
   useEffect(() => {
     if (mainRef.current && mounted && pathname) {
-      const saved = sessionStorage.getItem(`scroll_${pathname}`);
+      const cacheKey = `scroll_pos_${pathname}`;
+      const saved = sessionStorage.getItem(cacheKey);
       if (saved) {
-        setTimeout(() => {
+        // Small delay to ensure content has rendered
+        const timer = setTimeout(() => {
           if (mainRef.current) mainRef.current.scrollTop = parseInt(saved);
-        }, 50);
+        }, 30);
+        return () => clearTimeout(timer);
+      } else {
+        mainRef.current.scrollTop = 0;
       }
     }
   }, [pathname, mounted])
 
+  // CAPTURE SCROLL ON SCROLLING
   useEffect(() => {
     const currentMain = mainRef.current;
     if (!currentMain || !pathname) return;
+    
     const handleScroll = () => {
-      sessionStorage.setItem(`scroll_${pathname}`, currentMain.scrollTop.toString());
+      const cacheKey = `scroll_pos_${pathname}`;
+      sessionStorage.setItem(cacheKey, currentMain.scrollTop.toString());
     }
+
     currentMain.addEventListener('scroll', handleScroll, { passive: true });
     return () => currentMain.removeEventListener('scroll', handleScroll);
   }, [pathname])
@@ -55,11 +66,11 @@ function ShellContent({ children }: { children: React.ReactNode }) {
       <main 
         ref={mainRef}
         className={cn(
-          "flex-1 w-full overflow-y-auto overflow-x-hidden relative z-0 no-scrollbar",
+          "flex-1 w-full overflow-y-auto overflow-x-hidden relative z-0 no-scrollbar flex flex-col",
           mounted && showNav ? "pb-16" : "pb-0"
         )}
       >
-        <div className={cn("min-h-full flex flex-col", !mounted && "invisible")}>
+        <div className={cn("flex-1 flex flex-col", !mounted && "invisible")}>
            {children}
         </div>
       </main>

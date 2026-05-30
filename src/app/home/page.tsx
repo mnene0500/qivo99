@@ -23,6 +23,7 @@ interface UserProfile {
 }
 
 const PAGE_SIZE = 12;
+let globalUserCache: UserProfile[] = []; // Simple cross-mount cache
 
 function calculateAge(dob: string) {
   if (!dob) return 18
@@ -39,12 +40,12 @@ export default function HomePage() {
   
   const [activeTab, setActiveTab] = useState<'recommend' | 'nearby'>('recommend')
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [users, setUsers] = useState<UserProfile[]>([])
+  const [users, setUsers] = useState<UserProfile[]>(globalUserCache)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [profile, setProfile] = useState<any>(null)
 
-  const fetchUsers = useCallback(async (pageNum = 0) => {
+  const fetchUsers = useCallback(async (pageNum = 0, reshuffle = false) => {
     if (!profile) return;
     if (pageNum === 0) setIsRefreshing(true);
 
@@ -66,20 +67,35 @@ export default function HomePage() {
         query = query.eq('country', profile.country);
       }
       
-      // PRIORITY: Order by activity (updated_at) to show online/recent users first
+      // ORDER BY updated_at to bring online/recent users to the top
       query = query.order('updated_at', { ascending: false }).range(from, to);
 
       const { data } = await query;
 
       if (data) {
-        setUsers(prev => pageNum === 0 ? data : [...prev, ...data]);
+        let finalData = pageNum === 0 ? data : [...users, ...data];
+        
+        if (reshuffle && finalData.length > 3) {
+          // RESHUFFLE LOGIC:
+          // Keep the very top users (active now) but shuffle the order slightly
+          // specifically "move first to middle, push others up" as requested
+          const active = finalData.slice(0, 4);
+          const others = finalData.slice(4);
+          
+          // Cyclic shift for active ones
+          const shiftedActive = [active[1], active[2], active[0], active[3]];
+          finalData = [...shiftedActive, ...others];
+        }
+
+        setUsers(finalData as any);
+        globalUserCache = finalData as any;
         setHasMore(data.length === PAGE_SIZE);
         setPage(pageNum);
       }
     } finally {
       setIsRefreshing(false);
     }
-  }, [currentUser?.id, profile, activeTab]);
+  }, [currentUser?.id, profile, activeTab, users]);
 
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
@@ -91,12 +107,14 @@ export default function HomePage() {
   }, [isInitialized, currentUser, router, profile]);
 
   useEffect(() => {
-    if (profile) fetchUsers(0);
-  }, [profile, activeTab, fetchUsers]);
+    // Only fetch on tab change or if cache is empty
+    if (profile && (users.length === 0 || activeTab)) {
+      fetchUsers(0);
+    }
+  }, [profile, activeTab]);
 
   const handleRefresh = () => {
-    // Shuffle logic: Slightly offset the order but keep recent first
-    fetchUsers(0);
+    fetchUsers(0, true);
   }
 
   return (
