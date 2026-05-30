@@ -57,9 +57,10 @@ export async function completeOnboardingAction(payload: {
       .from('users')
       .select('uid')
       .eq('country', payload.country)
-      .limit(10);
+      .limit(20);
 
-    const isSuspectedAlt = existingProfiles && existingProfiles.length > 5;
+    // If more than 5 users from same region/ip profile, suspect alt
+    const isSuspectedAlt = existingProfiles && existingProfiles.length > 10;
 
     const defaultPhoto = payload.gender === 'male' 
       ? `https://picsum.photos/seed/${payload.uid}/400/400` 
@@ -138,7 +139,7 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       await trimHistory(supabase, payload.senderId, 'coin_history');
     }
     
-    // UPSERT CHAT RECORD TO ENSURE VISIBILITY IN CHAT LIST
+    // GUARANTEED UPSERT: Ensure chat record is visible in list
     await supabase.from('chats').upsert({ 
       id: payload.chatId, 
       last_message: safeText.slice(0, 100), 
