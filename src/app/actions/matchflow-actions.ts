@@ -84,7 +84,6 @@ export async function completeOnboardingAction(payload: {
     const { data: alreadyRewarded } = await supabase.from('coin_history').select('id').eq('user_id', payload.uid).eq('type', 'bonus').maybeSingle();
     
     if (!alreadyRewarded && !isSuspectedAlt) {
-      // SET TO 500 COINS AS REQUESTED
       const initialCoins = (payload.gender === 'male') ? 500 : 0;
       const initialDiamonds = (payload.gender === 'female') ? 150 : 0;
 
@@ -139,6 +138,7 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       await trimHistory(supabase, payload.senderId, 'coin_history');
     }
     
+    // UPSERT CHAT RECORD TO ENSURE VISIBILITY IN CHAT LIST
     await supabase.from('chats').upsert({ 
       id: payload.chatId, 
       last_message: safeText.slice(0, 100), 
@@ -160,6 +160,59 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
   } catch (err: any) {
     console.error("[Send Message Error]:", err.message);
     return { success: false, error: "system_error" };
+  }
+}
+
+export async function sendGiftAction(senderUid: string, recipientUid: string, coinAmount: number, giftName: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const ts = Date.now();
+    
+    // 1. Deduct Coins
+    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -coinAmount });
+    if (deductErr) throw new Error("insufficient_funds");
+
+    // 2. Award Diamonds (50% value)
+    const reward = Math.floor(coinAmount * 0.5);
+    await supabase.rpc("increment_diamonds", { p_user_id: recipientUid, p_amount: reward });
+    
+    // 3. Update Chat
+    const chatId = `direct_${[senderUid, recipientUid].sort()[0]}_${[senderUid, recipientUid].sort()[1]}`;
+    const text = `[Gift: ${giftName}]`;
+    
+    await supabase.from('chats').upsert({ 
+      id: chatId, 
+      last_message: text, 
+      last_message_at: ts, 
+      participant_ids: [senderUid, recipientUid],
+      last_sender_id: senderUid,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+
+    await supabase.from('messages').insert({ 
+      chat_id: chatId, 
+      sender_id: senderUid, 
+      text: text, 
+      is_gift: true, 
+      timestamp: ts 
+    });
+    
+    // 4. History Logs
+    await supabase.from('coin_history').insert({
+      user_id: senderUid, amount: -coinAmount, type: 'gift', description: `Sent ${giftName}`, timestamp: ts
+    });
+    await supabase.from('diamond_history').insert({
+      user_id: recipientUid, amount: reward, type: 'gift', description: `Received ${giftName}`, timestamp: ts
+    });
+
+    await Promise.all([
+      trimHistory(supabase, senderUid, 'coin_history'),
+      trimHistory(supabase, recipientUid, 'diamond_history')
+    ]);
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 }
 
@@ -343,30 +396,6 @@ export async function leaveAgencyAction(userUid: string) {
   const supabase = getSupabaseAdmin();
   try {
     await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('uid', userUid);
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function sendGiftAction(senderUid: string, recipientUid: string, coinAmount: number, giftName: string) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const ts = Date.now();
-    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -coinAmount });
-    if (deductErr) throw new Error("Insufficient coins.");
-    
-    const reward = Math.floor(coinAmount * 0.5);
-    await supabase.rpc("increment_diamonds", { p_user_id: recipientUid, p_amount: reward });
-    
-    const chatId = `direct_${[senderUid, recipientUid].sort()[0]}_${[senderUid, recipientUid].sort()[1]}`;
-    await supabase.from('messages').insert({ chat_id: chatId, sender_id: senderUid, text: `[Gift: ${giftName}]`, is_gift: true, timestamp: ts });
-    
-    await Promise.all([
-      trimHistory(supabase, senderUid, 'coin_history'),
-      trimHistory(supabase, recipientUid, 'diamond_history')
-    ]);
-
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };

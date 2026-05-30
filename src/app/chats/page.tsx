@@ -7,11 +7,11 @@ import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, User, Gift, Trash2, MoreVertical, BadgeCheck, Loader2, Ban, Flag, PlusCircle, Coins } from "lucide-react"
+import { Send, ChevronLeft, User, Gift, Trash2, MoreVertical, BadgeCheck, Loader2, Ban, Flag, PlusCircle, Coins, Heart, Star, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
-import { clearChatAction, sendMessageAction, markChatAsReadAction } from "@/app/actions/matchflow-actions"
+import { clearChatAction, sendMessageAction, markChatAsReadAction, sendGiftAction } from "@/app/actions/matchflow-actions"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 interface Message {
   id: string | number
@@ -43,6 +44,15 @@ interface ChatSummary {
   unread_count: number
 }
 
+const GIFTS = [
+  { name: "Rose", cost: 15, icon: "🌹" },
+  { name: "Heart", cost: 50, icon: "❤️" },
+  { name: "Crown", cost: 200, icon: "👑" },
+  { name: "Diamond", cost: 500, icon: "💎" },
+  { name: "Supercar", cost: 1000, icon: "🏎️" },
+  { name: "Private Jet", cost: 5000, icon: "🛩️" }
+]
+
 function ChatsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -58,6 +68,7 @@ function ChatsContent() {
   const [partnerProfile, setPartnerProfile] = useState<any>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [chatToDelete, setChatToDelete] = useState<string | null>(null)
+  const [giftOpen, setGiftOpen] = useState(false)
 
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
 
@@ -84,7 +95,7 @@ function ChatsContent() {
         return (c.last_message_at || 0) > clearedAt;
       });
 
-      const partnerIds = filteredChats.map(c => c.participant_ids.find((id: string) => id !== currentUser.id));
+      const partnerIds = Array.from(new Set(filteredChats.map(c => c.participant_ids.find((id: string) => id !== currentUser.id))));
       const { data: profiles } = await supabase.from('users').select('uid, name, photo_url, is_verified').in('uid', partnerIds);
       const profileMap = new Map(profiles?.map(p => [p.uid, p]));
 
@@ -118,7 +129,7 @@ function ChatsContent() {
     setChatId(cid);
     setLoadingDetail(true);
 
-    // Fetch Partner Immediately for Name display
+    // Fetch Partner Immediately
     supabase.from('users').select('*').eq('uid', startWithId).single().then(({ data }) => {
       setPartnerProfile(data);
     });
@@ -172,6 +183,18 @@ function ChatsContent() {
     }
   };
 
+  const handleSendGift = async (gift: typeof GIFTS[0]) => {
+    if (!currentUser || !startWithId) return
+    setGiftOpen(false)
+    
+    const res = await sendGiftAction(currentUser.id, startWithId, gift.cost, gift.name)
+    if (res.success) {
+      toast({ title: `${gift.name} Sent!` })
+    } else {
+      toast({ variant: "destructive", title: res.error === 'insufficient_funds' ? "Insufficient Coins" : "Failed to send gift" })
+    }
+  }
+
   const handleClearChat = async () => {
     if (!chatToDelete || !currentUser?.id) return
     const res = await clearChatAction(currentUser.id, chatToDelete)
@@ -202,7 +225,7 @@ function ChatsContent() {
       <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/90 backdrop-blur-md z-[50]">
         <h1 className="text-2xl font-black text-[#00A2FF] tracking-tight">Chats</h1>
       </header>
-      <main className="flex flex-col">
+      <main className="flex flex-col pb-24">
         {chatSummaries.length === 0 && !loadingSummaries ? (
           <div className="flex flex-col items-center justify-center py-40 opacity-40 px-12 text-center text-gray-300">
             <User className="w-12 h-12 mb-4" /><p className="font-bold text-xs uppercase tracking-widest">No conversations</p>
@@ -280,15 +303,48 @@ function ChatsContent() {
         {loadingDetail && <div className="flex justify-center py-4"><Loader2 className="animate-spin text-gray-300" /></div>}
       </main>
 
-      <footer className="p-4 border-t bg-white shrink-0">
-        <div className="flex items-center gap-3 max-w-5xl mx-auto w-full">
+      <footer className="p-4 border-t bg-white shrink-0 pb-[env(safe-area-inset-bottom,16px)]">
+        <div className="flex items-center gap-2 max-w-5xl mx-auto w-full">
+          <Dialog open={giftOpen} onOpenChange={setGiftOpen}>
+            <DialogTrigger asChild>
+               <Button variant="ghost" size="icon" className="h-12 w-12 rounded-full text-pink-500 bg-pink-50 shrink-0">
+                 <Gift className="w-6 h-6" />
+               </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-[2.5rem] p-8 border-none shadow-2xl">
+               <DialogHeader className="items-center text-center space-y-2">
+                  <div className="w-16 h-16 bg-pink-50 rounded-full flex items-center justify-center text-pink-500">
+                    <Sparkles className="w-8 h-8" />
+                  </div>
+                  <DialogTitle className="text-xl font-black uppercase tracking-tight">Send a Gift</DialogTitle>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">Impress {partnerProfile?.name || 'them'} with a virtual gesture.</p>
+               </DialogHeader>
+               <div className="grid grid-cols-3 gap-3 py-6">
+                 {GIFTS.map(g => (
+                   <button 
+                    key={g.name} 
+                    onClick={() => handleSendGift(g)}
+                    className="flex flex-col items-center gap-2 p-4 bg-gray-50 rounded-2xl hover:bg-pink-50 hover:text-pink-600 transition-all border border-transparent active:scale-95"
+                   >
+                     <span className="text-3xl">{g.icon}</span>
+                     <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black uppercase tracking-widest">{g.name}</span>
+                        <span className="text-[9px] font-bold text-yellow-600 flex items-center gap-0.5"><Coins className="w-2.5 h-2.5" />{g.cost}</span>
+                     </div>
+                   </button>
+                 ))}
+               </div>
+            </DialogContent>
+          </Dialog>
+
           <input 
             value={newMessage} 
             onChange={e => setNewMessage(e.target.value)} 
-            className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 outline-none" 
+            onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+            className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 outline-none font-medium text-sm" 
             placeholder="Type something..." 
           />
-          <Button onClick={handleSendMessage} size="icon" disabled={!newMessage.trim()} className="rounded-full h-12 w-12 bg-[#00A2FF] text-white">
+          <Button onClick={handleSendMessage} size="icon" disabled={!newMessage.trim()} className="rounded-full h-12 w-12 bg-[#00A2FF] text-white shrink-0 shadow-lg shadow-blue-100">
             <Send className="w-5 h-5" />
           </Button>
         </div>

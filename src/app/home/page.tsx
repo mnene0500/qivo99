@@ -63,7 +63,6 @@ export default function HomePage() {
         .neq('uid', currentUser?.id);
 
       if (activeTab === 'nearby') {
-        // Filter by same country as current user
         query = query.eq('country', profile.country);
       }
       
