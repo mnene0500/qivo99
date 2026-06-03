@@ -1,8 +1,7 @@
 
-# QIVO Production SQL (Run in Supabase SQL Editor)
+# QIVO HARDENED PRODUCTION SQL
 
 -- 1. SETUP ATOMIC HELPERS (Hardened for Realtime Economy)
--- These functions use SECURITY DEFINER to bypass RLS for internal balance shifts
 CREATE OR REPLACE FUNCTION public.increment_diamonds(p_user_id UUID, p_amount NUMERIC)
 RETURNS VOID AS $$
 BEGIN
@@ -60,24 +59,6 @@ CREATE TABLE IF NOT EXISTS public.balances (
   diamonds NUMERIC DEFAULT 0,
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT non_negative_balances CHECK (coins >= 0 AND diamonds >= 0)
-);
-
-CREATE TABLE IF NOT EXISTS public.push_subscriptions (
-  id BIGSERIAL PRIMARY KEY,
-  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
-  endpoint TEXT UNIQUE NOT NULL,
-  subscription_json JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.calls (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  chat_id TEXT NOT NULL,
-  caller_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
-  receiver_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
-  type TEXT CHECK (type IN ('video', 'voice')),
-  status TEXT DEFAULT 'calling', -- calling, active, ended
-  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.chats (
@@ -147,23 +128,32 @@ CREATE TABLE IF NOT EXISTS public.reports (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 3. ENABLE REALTIME SAFELY
-ALTER TABLE public.balances REPLICA IDENTITY FULL;
-ALTER TABLE public.users REPLICA IDENTITY FULL;
-ALTER TABLE public.chats REPLICA IDENTITY FULL;
-ALTER TABLE public.messages REPLICA IDENTITY FULL;
+CREATE TABLE IF NOT EXISTS public.pending_payments (
+  order_id UUID PRIMARY KEY,
+  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  amount NUMERIC,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-DO $$ 
-BEGIN 
-  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-    CREATE PUBLICATION supabase_realtime;
-  END IF;
-END $$;
+CREATE TABLE IF NOT EXISTS public.processed_payments (
+  order_tracking_id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  amount NUMERIC,
+  coins BIGINT,
+  payment_method TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-ALTER PUBLICATION supabase_realtime SET TABLE 
-  public.balances, public.users, public.chats, public.messages, public.withdrawals, public.reports;
+CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  endpoint TEXT UNIQUE NOT NULL,
+  subscription_json JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- 4. ENABLE RLS
+-- 3. ENABLE RLS & POLICIES
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
@@ -171,7 +161,7 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
--- 5. POLICIES
+DROP POLICY IF EXISTS "Public profiles are viewable" ON public.users;
 CREATE POLICY "Public profiles are viewable" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Users manage own profile" ON public.users FOR ALL USING (auth.uid() = uid);
 CREATE POLICY "Users view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
@@ -180,7 +170,7 @@ CREATE POLICY "Participants view messages" ON public.messages FOR SELECT USING (
   SELECT 1 FROM public.chats WHERE id = messages.chat_id AND auth.uid() = ANY(participant_ids)
 ));
 
--- 6. PERMISSIONS
+-- 4. GRANT PERMISSIONS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated;
