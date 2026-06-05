@@ -17,8 +17,6 @@ export async function generateAgoraTokenAction(chatId: string, uid: string) {
     throw new Error("Agora Credentials missing in Vercel Settings.");
   }
 
-  // AGORA LIMIT: Channel name must be within 64 bytes.
-  // Direct chat IDs are often 80+ chars. We deterministically shorten them.
   const sanitizedChannelName = chatId.length > 64 
     ? `ch_${chatId.slice(-60)}` 
     : chatId;
@@ -109,12 +107,15 @@ export async function endCallAction(callId: string, logReason?: 'Cancelled' | 'R
       const timestamp = Date.now();
       const text = `[${logReason}]`;
       
-      await supabase.from('chats').update({ 
+      // Update the chat to ensure it shows in the chat list as the last interaction
+      await supabase.from('chats').upsert({ 
+        id: call.chat_id,
         last_message: text, 
         last_message_at: timestamp, 
+        participant_ids: [call.caller_id, call.receiver_id],
         last_sender_id: call.caller_id,
         updated_at: new Date().toISOString()
-      }).eq('id', call.chat_id);
+      });
 
       await supabase.from('messages').insert({ 
         chat_id: call.chat_id, 

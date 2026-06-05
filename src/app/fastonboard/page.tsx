@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useRef } from "react"
@@ -67,13 +68,11 @@ export default function FastOnboardingPage() {
     setLoading(true)
 
     try {
-      let finalPhotoUrl = uploadedPhoto;
+      let finalPhotoUrl = uploadedPhoto || user.user_metadata?.avatar_url || user.user_metadata?.picture;
       
       if (uploadedPhoto && uploadedPhoto.startsWith('data:image')) {
         const { blob } = base64ToBlob(uploadedPhoto);
         finalPhotoUrl = await uploadProfilePhoto(blob, user.id);
-      } else {
-        finalPhotoUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture;
       }
 
       const res = await completeOnboardingAction({
@@ -84,7 +83,7 @@ export default function FastOnboardingPage() {
         dob,
         country,
         looking_for: lookingFor,
-        photo_url: finalPhotoUrl
+        photo_url: finalPhotoUrl || ""
       });
 
       if (res.success) {
@@ -217,7 +216,7 @@ export default function FastOnboardingPage() {
             <div className="relative">
                <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#00A2FF] pointer-events-none z-10" />
                <Select onValueChange={setLookingFor} value={lookingFor}>
-                 <SelectTrigger className="rounded-2xl h-16 pl-12 border-gray-50 bg-gray-50 font-black text-sm transition-all focus:bg-white">
+                 <SelectTrigger className="rounded-2xl h-16 pl-12 border-gray-100 bg-gray-50 font-black text-sm transition-all focus:bg-white">
                    <SelectValue placeholder="Your Goal?" />
                  </SelectTrigger>
                  <SelectContent className="rounded-2xl border-none shadow-2xl">

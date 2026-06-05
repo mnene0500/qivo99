@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect } from "react"
@@ -44,7 +45,7 @@ export default function RootPage() {
 
   return (
     <div className="fixed inset-0 bg-white flex flex-col items-center justify-center select-none z-[9999]">
-       <h1 className="text-6xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse duration-1000 uppercase">
+       <h1 className="text-4xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse duration-1000 uppercase">
          QIVO
        </h1>
     </div>

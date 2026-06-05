@@ -7,7 +7,7 @@ import { supabase, base64ToBlob, uploadPostPhoto } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Gift, BadgeCheck, Loader2, MessageSquare, PlusCircle, Coins, Phone, Video, Check, CheckCheck, Image as ImageIcon, X } from "lucide-react"
+import { Send, ChevronLeft, Gift, BadgeCheck, Loader2, MessageSquare, PlusCircle, Coins, Phone, Video, Check, CheckCheck, Image as ImageIcon, X, ShieldAlert } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
@@ -61,6 +61,8 @@ function ChatsContent() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLElement>(null)
 
+  const isBlocked = partner?.blocked_by?.includes(currentUser?.id) || partner?.blocking?.includes(currentUser?.id);
+
   const fetchSummaries = useCallback(async () => {
     if (!currentUser?.id) return;
     
@@ -80,13 +82,16 @@ function ChatsContent() {
     // Batch fetch partner profiles with explicit columns
     const { data: profiles } = await supabase
       .from('users')
-      .select('uid, name, photo_url, is_verified')
+      .select('uid, name, photo_url, is_verified, blocking, blocked_by')
       .in('uid', partnerIds);
 
-    const pMap = new Map(profiles?.map(p => [p.uid, p]));
+    const pMap = new Map(profiles?.filter(p => !p.blocking?.includes(currentUser.id) && !p.blocked_by?.includes(currentUser.id)).map(p => [p.uid, p]));
+    
     const enhanced = filtered.map(c => {
       const pId = c.participant_ids.find((id: string) => id !== currentUser.id);
       const p = pMap.get(pId);
+      if (!p) return null; // Skip blocked summaries
+
       const seenAt = (c.last_seen_at as any)?.[currentUser.id] || 0;
       return { 
         id: c.id, 
@@ -98,13 +103,14 @@ function ChatsContent() {
         last_message_at: c.last_message_at || 0, 
         unread_count: (c.last_message_at > seenAt && c.last_sender_id !== currentUser.id) ? 1 : 0 
       };
-    });
+    }).filter(Boolean) as ChatSummary[];
+
     setSummaries(enhanced); setLoading(false);
   }, [currentUser?.id]);
 
   useEffect(() => {
     if (!currentUser?.id) return;
-    supabase.from('users').select('uid, gender, is_admin, is_coin_seller, has_read_receipts').eq('uid', currentUser.id).single().then(({ data }) => setMe(data))
+    supabase.from('users').select('*').eq('uid', currentUser.id).single().then(({ data }) => setMe(data))
     fetchSummaries();
     
     const channel = supabase.channel('chats-sync')
@@ -141,7 +147,7 @@ function ChatsContent() {
     const cid = `direct_${[currentUser.id, startWithId].sort()[0]}_${[currentUser.id, startWithId].sort()[1]}`;
     setChatId(cid);
     
-    supabase.from('users').select('uid, name, photo_url').eq('uid', startWithId).single().then(({ data }) => setPartner(data));
+    supabase.from('users').select('*').eq('uid', startWithId).single().then(({ data }) => setPartner(data));
     
     const loadInitialMessages = async () => {
       const { data: chatData } = await supabase.from('chats').select('id, cleared_at, last_seen_at').eq('id', cid).maybeSingle();
@@ -178,7 +184,7 @@ function ChatsContent() {
   }, [startWithId, currentUser?.id]);
 
   const handleSend = async () => {
-    if (!chatId || !currentUser?.id || !startWithId || isSending) return;
+    if (!chatId || !currentUser?.id || !startWithId || isSending || isBlocked) return;
     const text = newMessage.trim();
     if (!text && !selectedImage) return;
 
@@ -220,7 +226,7 @@ function ChatsContent() {
   }
 
   const handleCall = async (type: 'video' | 'voice') => {
-    if (!currentUser?.id || !startWithId || !chatId) return;
+    if (!currentUser?.id || !startWithId || !chatId || isBlocked) return;
     setIsSending(true);
     const callRes = await startCallAction(chatId, currentUser.id, startWithId, type);
     if (callRes.success) {
@@ -232,7 +238,7 @@ function ChatsContent() {
   };
 
   const handleSendGift = async (g: typeof GIFTS[0]) => {
-    if (!currentUser?.id || !startWithId || isSending) return;
+    if (!currentUser?.id || !startWithId || isSending || isBlocked) return;
     if (coins < g.cost) { toast({ variant: "destructive", title: "Insufficient Coins" }); return; }
     setIsSending(true);
     try {
@@ -254,7 +260,7 @@ function ChatsContent() {
   );
 
   return (
-    <div className="flex flex-col h-screen bg-white overflow-hidden select-none">
+    <div className="flex flex-col h-screen bg-white overflow-hidden select-none relative">
       <header className="h-16 border-b flex items-center px-4 gap-4 bg-white z-50 shrink-0">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -341,6 +347,17 @@ function ChatsContent() {
           </div>
         </div>
       </footer>
+
+      {isBlocked && (
+        <div className="absolute inset-0 z-[150] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center p-10 text-center animate-in fade-in">
+           <div className="w-20 h-20 bg-red-50 rounded-[2.5rem] flex items-center justify-center mb-6 text-red-500">
+             <ShieldAlert className="w-10 h-10" />
+           </div>
+           <h3 className="text-xl font-black text-black tracking-tight uppercase">Interaction Blocked</h3>
+           <p className="text-xs font-bold text-gray-400 mt-2 leading-relaxed max-w-[240px]">This user is currently blocked. You cannot read messages or interact further.</p>
+           <Button onClick={() => router.back()} className="mt-8 rounded-full h-14 px-10 bg-black text-white font-black uppercase tracking-widest text-[10px]">Go Back</Button>
+        </div>
+      )}
 
       {previewImage && (
         <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center animate-in fade-in" onClick={() => setPreviewImage(null)}>

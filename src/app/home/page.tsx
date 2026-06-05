@@ -170,6 +170,15 @@ export default function HomePage() {
                 <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.3] rounded-[2rem] shadow-xl active:scale-[0.98] transition-all" onClick={() => router.push(`/users/${u.uid}`)}>
                   <Image src={u.photo_url} alt={u.name} fill className="object-cover" sizes="50vw" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                  
+                  {/* CHAT BUTTON TOP RIGHT */}
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}
+                    className="absolute top-4 right-4 bg-[#00A2FF] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg border border-white/20 active:scale-90 transition-transform z-20"
+                  >
+                    CHAT
+                  </button>
+
                   {isOnline && (
                     <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-black/20 backdrop-blur-md px-2 py-1 rounded-full border border-white/10">
                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
