@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
@@ -36,7 +35,6 @@ export default function AwardCoinsPage() {
     fetchData()
   }, [user?.id])
 
-  // AUTOMATIC USER LOOKUP BY MATCHFLOW ID
   useEffect(() => {
     const lookupUser = async () => {
       if (targetId.length < 5) {
@@ -45,24 +43,15 @@ export default function AwardCoinsPage() {
       }
       setSearching(true)
       try {
-        const { data } = await supabase
-          .from('users')
-          .select('uid, name')
-          .eq('match_flow_id', targetId.trim())
-          .maybeSingle()
-        
-        if (data) {
-          setResolvedUser(data)
-        } else {
-          setResolvedUser(null)
-        }
+        const { data } = await supabase.from('users').select('uid, name').eq('match_flow_id', targetId.trim()).maybeSingle()
+        if (data) setResolvedUser(data)
+        else setResolvedUser(null)
       } catch (e) {
         setResolvedUser(null)
       } finally {
         setSearching(false)
       }
     }
-
     const timer = setTimeout(lookupUser, 500)
     return () => clearTimeout(timer)
   }, [targetId])
@@ -81,29 +70,22 @@ export default function AwardCoinsPage() {
       toast({ variant: "destructive", title: "Fill all fields." });
       return
     }
-    
     const numAmount = Number(amount);
     if (numAmount < 1 || isNaN(numAmount)) {
       toast({ variant: "destructive", title: "Invalid amount." });
       return;
     }
-
     const isUnlimited = profile?.is_admin;
-
     if (!isUnlimited && coins < numAmount) {
       toast({ variant: "destructive", title: "Insufficient Balance" });
       return;
     }
-
     setLoading(true)
     try {
       const result = await awardCoinsAction(user.id, manualUid.trim(), numAmount)
       if (result.success) {
-        toast({ title: "Transfer Successful", description: result.message })
-        setTargetId("")
-        setManualUid("")
-        setAmount("")
-        setResolvedUser(null)
+        toast({ title: "Transfer Successful" })
+        setTargetId(""); setManualUid(""); setAmount(""); setResolvedUser(null)
       } else {
         toast({ variant: "destructive", title: "Error", description: result.error })
       }
@@ -119,9 +101,7 @@ export default function AwardCoinsPage() {
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
-        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black">
-          <ChevronLeft className="w-6 h-6" />
-        </Button>
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black"><ChevronLeft className="w-6 h-6" /></Button>
         <h1 className="text-sm font-black text-black uppercase tracking-widest">Coin Center</h1>
         <div className="w-10" />
       </header>
@@ -134,9 +114,7 @@ export default function AwardCoinsPage() {
           </div>
           <div className="space-y-1">
             <h2 className="text-2xl font-black text-black tracking-tight">Transfer Coins</h2>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-              {isUnlimited ? "System Admin Master Console" : "Merchant Sales Portal"}
-            </p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{isUnlimited ? "System Admin Master Console" : "Merchant Sales Portal"}</p>
           </div>
         </div>
 
@@ -162,31 +140,20 @@ export default function AwardCoinsPage() {
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest">Search Recipient (Numeric ID)</label>
             <div className="relative">
-              <Input 
-                placeholder="e.g. 1234567" 
-                value={targetId} 
-                onChange={(e) => setTargetId(e.target.value)} 
-                className="rounded-2xl h-14 text-center text-xl font-bold tracking-widest border-gray-100 bg-gray-50 text-black"
-              />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                {searching ? <Loader2 className="w-4 h-4 animate-spin text-gray-300" /> : <Search className="w-4 h-4 text-gray-200" />}
-              </div>
+              <Input placeholder="e.g. 1234567" value={targetId} onChange={(e) => setTargetId(e.target.value)} className="rounded-2xl h-14 text-center text-xl font-bold tracking-widest border-gray-100 bg-gray-50 text-black" />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">{searching ? <Loader2 className="w-4 h-4 animate-spin text-gray-300" /> : <Search className="w-4 h-4 text-gray-200" />}</div>
             </div>
           </div>
 
           {resolvedUser && (
             <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl animate-in zoom-in-95 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
-                  <UserCheck className="w-5 h-5" />
-                </div>
+                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm"><UserCheck className="w-5 h-5" /></div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-black uppercase text-blue-400 tracking-widest">User Found</p>
                   <p className="text-sm font-bold text-blue-900 truncate">{resolvedUser.name}</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={handleCopyUid} className="rounded-full text-blue-500 hover:bg-blue-100">
-                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                </Button>
+                <Button variant="ghost" size="icon" onClick={handleCopyUid} className="rounded-full text-blue-500 hover:bg-blue-100">{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}</Button>
               </div>
               <div className="bg-white/50 p-2 rounded-lg border border-blue-100/50">
                 <p className="text-[8px] font-black uppercase text-blue-300 tracking-widest">Internal UID</p>
@@ -197,36 +164,16 @@ export default function AwardCoinsPage() {
 
           <div className="space-y-2 pt-2">
             <label className="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest">Input Recipient UID</label>
-            <Input 
-              placeholder="Paste UID here" 
-              value={manualUid} 
-              onChange={(e) => setManualUid(e.target.value)} 
-              className="rounded-2xl h-14 text-center text-xs font-mono border-gray-100 bg-gray-50 text-black"
-            />
+            <Input placeholder="Paste UID here" value={manualUid} onChange={(e) => setManualUid(e.target.value)} className="rounded-2xl h-14 text-center text-xs font-mono border-gray-100 bg-gray-50 text-black" />
           </div>
 
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest">Amount to Send</label>
-            <Input 
-              type="number"
-              placeholder="0" 
-              value={amount} 
-              onChange={(e) => setAmount(e.target.value)} 
-              className="rounded-2xl h-14 text-center text-xl font-bold border-gray-100 bg-gray-50 text-black"
-            />
+            <Input type="number" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-2xl h-14 text-center text-xl font-bold border-gray-100 bg-gray-50 text-black" />
           </div>
 
-          <Button 
-            onClick={handleAward} 
-            disabled={loading || !manualUid || !amount}
-            className="w-full h-16 rounded-full bg-black text-white font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all"
-          >
-            {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-              <div className="flex items-center gap-2">
-                <Trophy className="w-5 h-5" />
-                Confirm Transfer
-              </div>
-            )}
+          <Button onClick={handleAward} disabled={loading || !manualUid || !amount} className="w-full h-16 rounded-full bg-black text-white font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all">
+            {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <div className="flex items-center gap-2"><Trophy className="w-5 h-5" /> Confirm Transfer</div>}
           </Button>
         </div>
       </main>

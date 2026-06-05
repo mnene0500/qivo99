@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
@@ -123,16 +122,16 @@ export default function MePage() {
       <div className="relative z-10">
         <header className="pt-16 pb-12 px-6 flex flex-col items-center text-center">
           <div className="relative mb-6">
-            <div className="relative w-32 h-32 rounded-[2.5rem] overflow-hidden bg-white/20 backdrop-blur-xl p-1 shadow-2xl rotate-3 hover:rotate-0 transition-transform duration-500">
-              <div className="w-full h-full rounded-[2.2rem] overflow-hidden bg-gray-100">
+            <div className="relative w-32 h-32 rounded-full overflow-hidden bg-white/20 backdrop-blur-xl p-1 shadow-2xl hover:scale-105 transition-transform duration-500">
+              <div className="w-full h-full rounded-full overflow-hidden bg-gray-100">
                 <Image src={`${displayPhoto}?t=${cacheBust}`} alt={profile?.name || "Me"} fill className="object-cover" sizes="128px" priority />
               </div>
             </div>
             <button 
-              className="absolute -bottom-2 -right-2 bg-white p-3 rounded-2xl shadow-xl active:scale-90 transition-transform border border-gray-50" 
+              className="absolute -bottom-1 right-2 bg-white p-2.5 rounded-full shadow-xl active:scale-90 transition-transform border border-gray-50" 
               onClick={() => router.push('/edit-profile')}
             >
-              <Pencil className="w-5 h-5 text-[#00A2FF]" />
+              <Pencil className="w-4 h-4 text-[#00A2FF]" />
             </button>
           </div>
           

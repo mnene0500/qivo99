@@ -44,8 +44,8 @@ export default function RootPage() {
 
   return (
     <div className="fixed inset-0 bg-white flex flex-col items-center justify-center select-none z-[9999]">
-       <h1 className="text-8xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse duration-1000">
-         Qivo
+       <h1 className="text-8xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse duration-1000 uppercase">
+         QIVO
        </h1>
     </div>
   );

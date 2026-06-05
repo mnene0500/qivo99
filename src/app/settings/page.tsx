@@ -171,7 +171,7 @@ export default function SettingsPage() {
                     <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-gray-50 text-slate-500 group-active:scale-90 transition-transform">
                       <LogOut className="w-5 h-5" />
                     </div>
-                    <span className="text-[15px] font-black tracking-tight text-slate-900">End Session</span>
+                    <span className="text-[15px] font-black tracking-tight text-slate-900">Sign Out</span>
                   </div>
                 </div>
               </AlertDialogTrigger>
