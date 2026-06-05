@@ -1,12 +1,10 @@
 
-# QIVO FINAL HARDENED PRODUCTION SQL (v5)
+# QIVO FINAL HARDENED PRODUCTION SQL (v6)
 
-Run this entire script in the **Supabase SQL Editor** to initialize all tables, roles, and atomic economic functions. This version enforces **Admin**, **Coin Seller**, and **Agent** roles with strictly non-negative balances.
+Run this entire script in the **Supabase SQL Editor** to initialize all tables, roles, and atomic economic functions. This version includes the missing Profile Visits table.
 
 ```sql
 -- 1. SETUP ATOMIC ECONOMY HELPERS
--- These functions handle balance shifts securely via SECURITY DEFINER
--- Enforces non-negative balances using GREATEST(0, ...)
 CREATE OR REPLACE FUNCTION public.increment_diamonds(p_user_id UUID, p_amount NUMERIC)
 RETURNS VOID AS $$
 BEGIN
@@ -42,9 +40,9 @@ CREATE TABLE IF NOT EXISTS public.users (
   match_flow_id TEXT UNIQUE,
   education_level TEXT,
   onboarding_complete BOOLEAN DEFAULT FALSE,
-  is_admin BOOLEAN DEFAULT FALSE, -- Unlimited Coin Authority
-  is_coin_seller BOOLEAN DEFAULT FALSE, -- Certified Merchant (Deducts from own balance)
-  is_agent BOOLEAN DEFAULT FALSE, -- Agency Leader
+  is_admin BOOLEAN DEFAULT FALSE,
+  is_coin_seller BOOLEAN DEFAULT FALSE,
+  is_agent BOOLEAN DEFAULT FALSE,
   is_verified BOOLEAN DEFAULT FALSE,
   is_deleted BOOLEAN DEFAULT FALSE,
   agency_id TEXT,
@@ -65,6 +63,15 @@ CREATE TABLE IF NOT EXISTS public.balances (
   CONSTRAINT non_negative_balances CHECK (coins >= 0 AND diamonds >= 0)
 );
 
+CREATE TABLE IF NOT EXISTS public.profile_visits (
+  id BIGSERIAL PRIMARY KEY,
+  visitor_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  visited_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
+  count INTEGER DEFAULT 1,
+  last_visit_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(visitor_id, visited_id)
+);
+
 CREATE TABLE IF NOT EXISTS public.chats (
   id TEXT PRIMARY KEY,
   participant_ids UUID[] NOT NULL,
@@ -82,7 +89,8 @@ CREATE TABLE IF NOT EXISTS public.messages (
   sender_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
   text TEXT,
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
-  is_gift BOOLEAN DEFAULT FALSE
+  is_gift BOOLEAN DEFAULT FALSE,
+  image_url TEXT
 );
 
 CREATE TABLE IF NOT EXISTS public.coin_history (
@@ -150,6 +158,7 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profile_visits ENABLE ROW LEVEL SECURITY;
 
 -- 4. CREATE POLICIES
 DROP POLICY IF EXISTS "Public profiles viewable" ON public.users;
@@ -160,6 +169,7 @@ CREATE POLICY "Participants view chats" ON public.chats FOR SELECT USING (auth.u
 CREATE POLICY "Participants view messages" ON public.messages FOR SELECT USING (EXISTS (
   SELECT 1 FROM public.chats WHERE id = messages.chat_id AND auth.uid() = ANY(participant_ids)
 ));
+CREATE POLICY "Users view own visits" ON public.profile_visits FOR SELECT USING (auth.uid() = visited_id);
 
 -- 5. GRANT PERMISSIONS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;

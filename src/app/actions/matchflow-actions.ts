@@ -5,14 +5,12 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 
 /**
  * @fileOverview Definitive Server Actions for QIVO Production.
- * Hardened atomic operations for Messaging, Economy, Gaming, and Management.
+ * Optimized atomic operations for Messaging, Economy, Gaming, and Social.
  */
 
 function filterSensitiveContent(text: string): string {
   const sensitivePatterns = [
     /\d{3,}/g, 
-    /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi,
-    /\b(sifuri|moja|mbili|tatu|nne|tano|sita|saba|nane|tisa|kumi)\b/gi,
     /\b(fuck|bitch|idiot|stupid|scam|fraud|malaya|pumbavu|nguruwe)\b/gi 
   ];
   let filtered = text;
@@ -52,7 +50,6 @@ export async function completeOnboardingAction(payload: {
 
     if (error) throw error;
 
-    // Award welcome bonus
     const bonus = 10;
     await supabase.rpc("increment_coins", { p_user_id: payload.uid, p_amount: bonus });
     await supabase.from('coin_history').insert({
@@ -65,7 +62,6 @@ export async function completeOnboardingAction(payload: {
 
     return { success: true, bonus };
   } catch (err: any) {
-    console.error("Onboarding Error:", err.message);
     return { success: false, error: err.message };
   }
 }
@@ -219,6 +215,7 @@ export async function deleteUserCompletelyAction(targetUid: string) {
       supabase.from('messages').delete().eq('sender_id', targetUid),
       supabase.from('reports').delete().or(`reporter_id.eq.${targetUid},reported_id.eq.${targetUid}`),
       supabase.from('calls').delete().or(`caller_id.eq.${targetUid},receiver_id.eq.${targetUid}`),
+      supabase.from('profile_visits').delete().or(`visitor_id.eq.${targetUid},visited_id.eq.${targetUid}`),
       supabase.from('chats').delete().contains('participant_ids', [targetUid])
     ]);
     await supabase.from('users').delete().eq('uid', targetUid);
