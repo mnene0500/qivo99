@@ -261,16 +261,37 @@ function ChatsContent() {
       </main>
 
       <footer className="p-4 border-t bg-white shrink-0 pb-[calc(env(safe-area-inset-bottom,20px)+8px)]">
-        {selectedImage && (
-          <div className="mb-4 relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-[#00A2FF] animate-in zoom-in-95">
-             <Image src={selectedImage} alt="Preview" fill className="object-cover" />
-             <button onClick={() => setSelectedImage(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"><X className="w-3 h-3" /></button>
+        <div className="max-w-5xl mx-auto w-full space-y-4">
+          {selectedImage && (
+            <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-[#00A2FF] animate-in zoom-in-95">
+              <Image src={selectedImage} alt="Preview" fill className="object-cover" />
+              <button onClick={() => setSelectedImage(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"><X className="w-3 h-3" /></button>
+            </div>
+          )}
+          
+          {/* TOP ROW: INPUT AND SEND */}
+          <div className="flex items-center gap-2">
+            <input 
+              value={newMessage} 
+              onChange={e => setNewMessage(e.target.value)} 
+              onKeyDown={e => e.key === 'Enter' && !isSending && handleSend()} 
+              className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 outline-none font-medium text-sm border border-black/5 focus:bg-white transition-all" 
+              placeholder="Type message..." 
+            />
+            <Button onClick={handleSend} size="icon" disabled={(!newMessage.trim() && !selectedImage) || isSending} className="rounded-full h-12 w-12 bg-[#00A2FF] text-white shrink-0 shadow-lg active:scale-90 transition-all">
+              {isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+            </Button>
           </div>
-        )}
-        <div className="flex items-center gap-2 max-w-5xl mx-auto w-full">
-          <div className="flex items-center gap-1">
+
+          {/* BOTTOM ROW: ACTIONS (GIFT, CAMERA) */}
+          <div className="flex items-center gap-4 px-1">
             <Sheet onOpenChange={(open) => !open && setLastGiftSent(null)}>
-              <SheetTrigger asChild><Button size="icon" variant="ghost" className="rounded-full text-pink-500 shrink-0"><Gift className="w-6 h-6" /></Button></SheetTrigger>
+              <SheetTrigger asChild>
+                <button className="flex items-center gap-2 text-pink-500 active:scale-95 transition-transform">
+                  <Gift className="w-6 h-6" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Send Gift</span>
+                </button>
+              </SheetTrigger>
               <SheetContent side="bottom" className="rounded-t-[3rem] p-6 border-none bg-black text-white h-[70vh] flex flex-col overflow-hidden">
                 <SheetHeader className="shrink-0 mb-6"><div className="flex items-center justify-between px-4"><div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/5"><Coins className="w-3.5 h-3.5 text-yellow-500 fill-current" /><span className="text-xs font-black">{coins}</span></div><SheetTitle className="text-center font-black uppercase text-[10px] tracking-[0.2em] text-gray-400">Gifts</SheetTitle><Button onClick={() => router.push('/recharge')} variant="ghost" size="sm" className="h-8 rounded-full bg-[#00A2FF] text-white text-[9px] font-black uppercase px-4 shadow-lg shadow-blue-500/20"><PlusCircle className="w-3 h-3 mr-1" /> Top Up</Button></div></SheetHeader>
                 <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
@@ -282,11 +303,16 @@ function ChatsContent() {
                 </div>
               </SheetContent>
             </Sheet>
-            <Button size="icon" variant="ghost" className="rounded-full text-blue-500 shrink-0" onClick={() => fileInputRef.current?.click()}><Camera className="w-6 h-6" /></Button>
+
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              className="flex items-center gap-2 text-blue-500 active:scale-95 transition-transform"
+            >
+              <Camera className="w-6 h-6" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Share Photo</span>
+            </button>
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
           </div>
-          <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && !isSending && handleSend()} className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 outline-none font-medium text-sm border border-black/5 focus:bg-white transition-all" placeholder="Type message..." />
-          <Button onClick={handleSend} size="icon" disabled={(!newMessage.trim() && !selectedImage) || isSending} className="rounded-full h-12 w-12 bg-[#00A2FF] text-white shrink-0 shadow-lg active:scale-90 transition-all">{isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}</Button>
         </div>
       </footer>
 
