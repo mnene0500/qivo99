@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
 /**
- * @fileOverview Hardened Agora Call Page with Connection-Locked Billing.
+ * @fileOverview Hardened Agora Call Page with 40s Timeout and Sync.
  * Deduction Schedule:
  * - Minute 1: Deduct at 11th second (10s free trial).
  * - Minute 2+: Deduct at start of each minute (61s, 121s, etc.).
@@ -36,7 +36,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   
   const [joined, setJoined] = useState(false)
   const [muted, setMuted] = useState(false)
-  const [cameraOff, setCameraOff] = useState(type === 'voice')
+  const [cameraOff, setCameraOff] = useState(false)
   const [remoteUser, setRemoteUser] = useState<any>(null)
   const [partnerProfile, setPartnerProfile] = useState<any>(null)
   const [duration, setDuration] = useState(0)
@@ -47,6 +47,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const localVideoRef = useRef<HTMLDivElement>(null)
   const remoteVideoRef = useRef<HTMLDivElement>(null)
   const billingTimer = useRef<NodeJS.Timeout | null>(null)
+  const ringingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const mounted = useRef(true)
 
   useEffect(() => {
@@ -57,18 +58,31 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return () => { mounted.current = false }
   }, [partnerId])
 
+  // 1. SYNC: Listen for Global Call End
   useEffect(() => {
     if (!callId) return
     const channel = supabase.channel(`call-mon-${callId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'calls', filter: `id=eq.${callId}` }, (payload) => {
         if (payload.new.status === 'ended' && mounted.current) {
-          handleEndCall(false, payload.new.reason || 'Call Ended');
+          handleEndCall(false); // End locally without pushing another update
         }
       }).subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [callId])
 
-  // TIMER & BILLING: Starts ONLY when connected (remoteUser present)
+  // 2. TIMEOUT: 40s Ringing Limit
+  useEffect(() => {
+    if (isRinging && !remoteUser) {
+      ringingTimeoutRef.current = setTimeout(() => {
+        if (mounted.current && isRinging && !remoteUser) {
+          handleEndCall(true, 'No Answer');
+        }
+      }, 40000);
+    }
+    return () => { if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current) }
+  }, [isRinging, !!remoteUser])
+
+  // 3. TIMER & BILLING: Starts ONLY when connected
   useEffect(() => {
     if (joined && remoteUser && user?.id && partnerId) {
       billingTimer.current = setInterval(async () => {
@@ -76,16 +90,11 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         
         setDuration(prev => {
           const next = prev + 1
-          
-          // BILLING LOGIC:
-          // 1st Min: Deduct at 11s.
-          // 2nd Min+: Deduct at start (61s, 121s...).
           const isDeductionPoint = next === 11 || (next > 60 && (next - 1) % 60 === 0);
           
           if (isDeductionPoint) {
             deductCallCoinsAction(user.id, type, partnerId).then(res => {
               if (!res.success && mounted.current) {
-                // Instantly end call if funds are missing
                 handleEndCall(true, 'Insufficient Balance');
               }
             })
@@ -110,24 +119,26 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           if (mediaType === "video") {
             setRemoteUser(remote)
             setIsRinging(false)
+            if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current);
             setTimeout(() => { if (remoteVideoRef.current) remote.videoTrack?.play(remoteVideoRef.current) }, 300)
           }
           if (mediaType === "audio") {
             remote.audioTrack?.play()
             setIsRinging(false)
+            if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current);
             setRemoteUser((prev: any) => prev || remote)
           }
         })
 
         client.on("user-left", () => { if (mounted.current) handleEndCall(false) })
 
-        // 1. Mic Req
+        // Audio track setup
         const audioTrack = await AgoraRTC.createMicrophoneAudioTrack().catch(e => {
           throw new Error("Microphone permission required.");
         });
         rtc.current.localAudioTrack = audioTrack;
 
-        // 2. Camera Req
+        // Video track setup
         if (type === 'video') {
           const videoTrack = await AgoraRTC.createCameraVideoTrack({ facingMode: "user" }).catch(e => {
             console.warn("Camera failed", e);
@@ -139,7 +150,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           }
         }
 
-        // 3. Join & Publish
         const tokenData = await generateAgoraTokenAction(chatId, user.id);
         await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid);
         
@@ -171,7 +181,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     if (manual && callId) {
       let reason = overrideReason || 'Call Ended';
       if (!remoteUser && isRinging) {
-        reason = 'Cancelled';
+        reason = overrideReason === 'No Answer' ? 'No Answer' : 'Cancelled';
       } else if (remoteUser) {
         const m = Math.floor(duration / 60);
         const s = duration % 60;
@@ -206,7 +216,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   return (
     <div className="fixed inset-0 bg-black z-[100] flex flex-col overflow-hidden select-none">
       <div className="absolute inset-0 z-0">
-        {type === 'video' && remoteUser ? <div ref={remoteVideoRef} className="w-full h-full" /> : (
+        {type === 'video' && remoteUser ? <div ref={remoteVideoRef} className="w-full h-full bg-black" /> : (
           <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900">
              <div className="relative">
                {isRinging && <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20" />}
@@ -236,8 +246,16 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
       </div>
 
       {type === 'video' && (
-        <div className={cn("absolute transition-all duration-500 overflow-hidden border-2 border-white/20 shadow-2xl z-20", remoteUser ? "top-12 right-6 w-32 aspect-[3/4] rounded-3xl" : "inset-0 rounded-none z-[5]")}>
+        <div className={cn(
+          "absolute transition-all duration-500 overflow-hidden border-2 border-white/20 shadow-2xl z-20", 
+          remoteUser ? "top-12 right-6 w-32 aspect-[3/4] rounded-3xl" : "inset-0 rounded-none z-[5]"
+        )}>
           <div ref={localVideoRef} className={cn("w-full h-full bg-zinc-800", (cameraOff || !rtc.current.localVideoTrack) && "opacity-0")} />
+          {(cameraOff || !rtc.current.localVideoTrack) && (
+            <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80 backdrop-blur-md">
+               <VideoOff className="w-8 h-8 text-white/20" />
+            </div>
+          )}
         </div>
       )}
 
