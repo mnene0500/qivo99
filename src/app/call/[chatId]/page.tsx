@@ -37,6 +37,10 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const [isRinging, setIsRinging] = useState(true)
   const [permissionError, setPermissionError] = useState<string | null>(null)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
+  
+  // Aggregate cost tracking
+  const totalCostRef = useRef(0)
+  const totalDiamondsRef = useRef(0)
 
   const localVideoRef = useRef<HTMLDivElement>(null)
   const remoteVideoRef = useRef<HTMLDivElement>(null)
@@ -81,11 +85,15 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         
         setDuration(prev => {
           const next = prev + 1
+          // Deduction points: 11s, 61s, 121s...
           const isDeductionPoint = next === 11 || (next > 60 && (next - 1) % 60 === 0);
           
           if (isDeductionPoint) {
             deductCallCoinsAction(user.id, type, partnerId).then(res => {
-              if (!res.success && mounted.current) {
+              if (res.success) {
+                totalCostRef.current += (res.cost || 0);
+                totalDiamondsRef.current += (res.diamondReward || 0);
+              } else if (mounted.current) {
                 handleEndCall(true, 'Insufficient Balance');
               }
             })
@@ -164,16 +172,21 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
     const newMode = facingMode === 'user' ? 'environment' : 'user';
     
-    // Hard restart camera track for stability
-    await rtc.current.client.unpublish(rtc.current.localVideoTrack);
-    rtc.current.localVideoTrack.stop();
-    rtc.current.localVideoTrack.close();
-    
-    const newVideoTrack = await AgoraRTC.createCameraVideoTrack({ facingMode: newMode });
-    rtc.current.localVideoTrack = newVideoTrack;
-    if (localVideoRef.current) newVideoTrack.play(localVideoRef.current);
-    await rtc.current.client.publish(newVideoTrack);
-    setFacingMode(newMode);
+    try {
+      // STOP and UNPUBLISH current track
+      await rtc.current.client.unpublish(rtc.current.localVideoTrack);
+      rtc.current.localVideoTrack.stop();
+      rtc.current.localVideoTrack.close();
+      
+      // START NEW track with different facingMode
+      const newVideoTrack = await AgoraRTC.createCameraVideoTrack({ facingMode: newMode });
+      rtc.current.localVideoTrack = newVideoTrack;
+      if (localVideoRef.current) newVideoTrack.play(localVideoRef.current);
+      await rtc.current.client.publish(newVideoTrack);
+      setFacingMode(newMode);
+    } catch (e) {
+      console.error("Camera switch failed", e);
+    }
   };
 
   const shutdownAgora = async () => {
@@ -199,7 +212,15 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         const s = duration % 60;
         reason = `Duration: ${m}:${s.toString().padStart(2, '0')}`;
       }
-      await endCallAction(callId, reason);
+      
+      // Pass aggregate costs for a single history entry
+      await endCallAction({
+        callId,
+        logReason: reason,
+        totalCost: totalCostRef.current,
+        totalDiamonds: totalDiamondsRef.current,
+        partnerName: partnerProfile?.name
+      });
     }
   }
 

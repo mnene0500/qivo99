@@ -6,7 +6,7 @@ import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
 /**
  * @fileOverview Hardened Agora Token Generation and Billing Engine.
- * Fixed: Sanitizes channelName to ensure it is under 64 bytes.
+ * Fixed: Sanitizes channelName and handles aggregated coin history.
  */
 
 export async function generateAgoraTokenAction(chatId: string, uid: string) {
@@ -53,6 +53,7 @@ export async function startCallAction(chatId: string, callerId: string, receiver
       return { success: false, error: `${receiver.name} has activated Do Not Disturb.` };
     }
 
+    // REAL-TIME BUSY CHECK: Only look at calls from the last 2 minutes
     const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
     const { data: activeCalls } = await supabase
       .from('calls')
@@ -61,10 +62,11 @@ export async function startCallAction(chatId: string, callerId: string, receiver
       .in('status', ['calling', 'active'])
       .gt('created_at', twoMinsAgo);
     
+    // Ignore ringing calls older than 45 seconds
     const validBusyCall = activeCalls?.find(c => {
       if (c.status === 'active') return true;
       const createdAt = new Date(c.created_at).getTime();
-      return (Date.now() - createdAt) < 60000;
+      return (Date.now() - createdAt) < 45000; 
     });
 
     if (validBusyCall) {
@@ -81,6 +83,7 @@ export async function startCallAction(chatId: string, callerId: string, receiver
       }
     }
 
+    // Force end any stale calls by the caller
     await supabase.from('calls').update({ status: 'ended' }).eq('caller_id', callerId).neq('status', 'ended');
 
     const { data, error } = await supabase.from('calls').insert({
@@ -98,16 +101,27 @@ export async function startCallAction(chatId: string, callerId: string, receiver
   }
 }
 
-export async function endCallAction(callId: string, logReason?: 'Cancelled' | 'Rejected' | string) {
+export async function endCallAction(payload: {
+  callId: string;
+  logReason?: 'Cancelled' | 'Rejected' | 'No Answer' | string;
+  totalCost?: number;
+  totalDiamonds?: number;
+  partnerName?: string;
+}) {
   const supabase = getSupabaseAdmin();
   try {
-    const { data: call } = await supabase.from('calls').update({ status: 'ended' }).eq('id', callId).select().single();
+    const { data: call } = await supabase
+      .from('calls')
+      .update({ status: 'ended' })
+      .eq('id', payload.callId)
+      .select()
+      .single();
     
-    if (call && logReason) {
+    if (call) {
       const timestamp = Date.now();
-      const text = `[${logReason}]`;
+      const text = payload.logReason ? `[${payload.logReason}]` : '[Call Ended]';
       
-      // Update the chat to ensure it shows in the chat list as the last interaction
+      // 1. Log to Chat History
       await supabase.from('chats').upsert({ 
         id: call.chat_id,
         last_message: text, 
@@ -123,6 +137,28 @@ export async function endCallAction(callId: string, logReason?: 'Cancelled' | 'R
         text, 
         timestamp 
       });
+
+      // 2. Aggregate Coin History (One entry for the whole call)
+      if (payload.totalCost && payload.totalCost > 0) {
+        await supabase.from('coin_history').insert({
+          user_id: call.caller_id,
+          amount: -payload.totalCost,
+          type: 'call_cost',
+          description: `Call with ${payload.partnerName || 'User'}`,
+          timestamp: Date.now()
+        });
+      }
+
+      // 3. Aggregate Diamond History
+      if (payload.totalDiamonds && payload.totalDiamonds > 0) {
+        await supabase.from('diamond_history').insert({
+          user_id: call.receiver_id,
+          amount: payload.totalDiamonds,
+          type: 'call_earning',
+          description: `Call from ${payload.partnerName || 'Admirer'}`,
+          timestamp: Date.now()
+        });
+      }
     }
     return { success: true };
   } catch (error: any) {
@@ -138,31 +174,18 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
 
     const cost = type === 'video' ? 150 : 70;
     
+    // Deduct coins silently (No history record here, history is aggregated in endCallAction)
     const { error: deductError } = await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: -cost });
     if (deductError) return { success: false, error: "insufficient_funds" };
 
-    await supabase.from("coin_history").insert({
-      user_id: uid,
-      amount: -cost,
-      type: "call_cost",
-      description: `${type.toUpperCase()} Call Minute`,
-      timestamp: Date.now()
-    });
-
     const { data: recipient } = await supabase.from('users').select('gender').eq('uid', partnerId).single();
+    let diamondReward = 0;
     if (user?.gender === 'male' && recipient?.gender === 'female') {
-      const reward = Math.floor(cost * 0.4); 
-      await supabase.rpc("increment_diamonds", { p_user_id: partnerId, p_amount: reward });
-      await supabase.from("diamond_history").insert({
-        user_id: partnerId,
-        amount: reward,
-        type: "call_earning",
-        description: `Call from ${user?.name || 'User'}`,
-        timestamp: Date.now()
-      });
+      diamondReward = Math.floor(cost * 0.4); 
+      await supabase.rpc("increment_diamonds", { p_user_id: partnerId, p_amount: diamondReward });
     }
 
-    return { success: true };
+    return { success: true, cost, diamondReward };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Heart, Loader2, Camera, ChevronLeft, User, MapPin, Calendar, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import * as Actions from "@/app/actions/matchflow-actions"
+import { completeOnboardingAction } from "@/app/actions/matchflow-actions"
 
 const AFRICAN_COUNTRIES = [
   "Kenya", "Tanzania", "Uganda", "Rwanda", "Burundi", "South Sudan", "Ethiopia", "Somalia", "Eritrea", "Djibouti", "South Africa", "Nigeria", "Ghana", "Egypt"
@@ -55,11 +55,13 @@ export default function FastOnboardingPage() {
   const handleComplete = async () => {
     if (!user) return
     
+    // Step 1: If female and haven't shown photo step, show it
     if (gender === 'female' && !showPhotoStep) {
       setShowPhotoStep(true)
       return
     }
 
+    // Step 2: If female, require the photo
     if (gender === 'female' && !uploadedPhoto) {
       toast({ variant: "destructive", title: "Photo Required" })
       return
@@ -70,12 +72,13 @@ export default function FastOnboardingPage() {
     try {
       let finalPhotoUrl = uploadedPhoto || user.user_metadata?.avatar_url || user.user_metadata?.picture;
       
+      // ASYNC UPLOAD: Crucial to do this before the DB action
       if (uploadedPhoto && uploadedPhoto.startsWith('data:image')) {
         const { blob } = base64ToBlob(uploadedPhoto);
         finalPhotoUrl = await uploadProfilePhoto(blob, user.id);
       }
 
-      const res = await Actions.completeOnboardingAction({
+      const res = await completeOnboardingAction({
         uid: user.id,
         email: user.email!,
         name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || "User",
