@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
 /**
- * @fileOverview Overhauled Agora Call Page with PIP and 10s Free Logic.
- * Fixed: Sequenced hardware initialization for mobile stability.
+ * @fileOverview Overhauled Agora Call Page with PIP and Status Logging.
+ * Fixed: Automatic termination for insufficient coins and duration logging.
  */
 
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -59,7 +59,9 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     if (!callId) return
     const channel = supabase.channel(`call-mon-${callId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'calls', filter: `id=eq.${callId}` }, (payload) => {
-        if (payload.new.status === 'ended' && mounted.current) handleEndCall(false)
+        if (payload.new.status === 'ended' && mounted.current) {
+          handleEndCall(false, payload.new.reason || 'Call Ended');
+        }
       }).subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [callId])
@@ -68,13 +70,17 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     if (joined && remoteUser && user?.id && partnerId) {
       billingTimer.current = setInterval(async () => {
         if (!mounted.current) return;
+        
         setDuration(prev => {
           const next = prev + 1
-          // Logic: 11th second of first minute, then start of every next minute
           const isDeductionPoint = next === 11 || (next > 60 && (next - 11) % 60 === 0);
+          
           if (isDeductionPoint) {
             deductCallCoinsAction(user.id, type, partnerId).then(res => {
-              if (!res.success && mounted.current) handleEndCall(true)
+              if (!res.success && mounted.current) {
+                // Terminate call due to insufficient funds
+                handleEndCall(true);
+              }
             })
           }
           return next
@@ -108,16 +114,14 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
         client.on("user-left", () => { if (mounted.current) handleEndCall(false) })
 
-        // 1. Request Audio FIRST (Sequenced for mobile stability)
         const audioTrack = await AgoraRTC.createMicrophoneAudioTrack().catch(e => {
           throw new Error("Microphone permission denied or in use.");
         });
         rtc.current.localAudioTrack = audioTrack;
 
-        // 2. Request Video SECOND if needed
         if (type === 'video') {
           const videoTrack = await AgoraRTC.createCameraVideoTrack({ facingMode: "user" }).catch(e => {
-            console.warn("Camera failed, continuing as audio only", e);
+            console.warn("Camera failed", e);
             return null;
           });
           if (videoTrack) {
@@ -126,7 +130,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           }
         }
 
-        // 3. Generate Token and Join
         const tokenData = await generateAgoraTokenAction(chatId, user.id);
         await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid);
         
@@ -135,13 +138,17 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         
         await client.publish(tracks);
         setJoined(true);
+        
+        // Update status to active in DB
+        if (callId) await supabase.from('calls').update({ status: 'active' }).eq('id', callId);
+
       } catch (err: any) {
-        setPermissionError(err.message || "Hardware setup failed. Ensure permissions are granted.");
+        setPermissionError(err.message || "Hardware setup failed.");
       }
     }
     init()
     return () => { shutdownAgora() }
-  }, [chatId, user?.id, type])
+  }, [chatId, user?.id, type, callId])
 
   const shutdownAgora = async () => {
     if (rtc.current.localAudioTrack) { rtc.current.localAudioTrack.stop(); rtc.current.localAudioTrack.close(); }
@@ -149,16 +156,22 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     if (rtc.current.client) { await rtc.current.client.leave().catch(() => {}); }
   }
 
-  const handleEndCall = async (manual = true) => {
+  const handleEndCall = async (manual = true, overrideReason?: string) => {
     await shutdownAgora()
-    if (manual && callId) await endCallAction(callId)
-    if (mounted.current) router.replace(`/chats?startWith=${partnerId}`)
-  }
-
-  const formatDuration = (s: number) => {
-    const m = Math.floor(s / 60)
-    const ss = s % 60
-    return `${m}:${ss.toString().padStart(2, '0')}`
+    
+    if (manual && callId) {
+      let reason = 'Call Ended';
+      if (!remoteUser && isRinging) {
+        reason = 'Cancelled';
+      } else if (remoteUser) {
+        const m = Math.floor(duration / 60);
+        const s = duration % 60;
+        reason = `Duration: ${m}:${s.toString().padStart(2, '0')}`;
+      }
+      await endCallAction(callId, overrideReason || reason);
+    }
+    
+    if (mounted.current) router.replace(`/chats?startWith=${partnerId}`);
   }
 
   if (permissionError) return <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-10 text-center z-[200]"><AlertCircle className="w-12 h-12 text-red-500 mb-4" /><h2 className="text-white font-bold text-xl mb-2">Hardware Error</h2><p className="text-gray-400 text-sm mb-10 leading-relaxed">{permissionError}</p><Button onClick={() => router.back()} className="rounded-2xl h-14 px-10 bg-[#00A2FF] text-white font-black uppercase tracking-widest text-xs">Go Back</Button></div>
@@ -186,7 +199,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
              </div>
              <h2 className="text-white text-2xl font-black mt-8 tracking-tight">{partnerProfile?.name || 'Connecting...'}</h2>
              <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.4em] mt-4">
-               {remoteUser ? formatDuration(duration) : 'Ringing...'}
+               {remoteUser ? `Duration: ${Math.floor(duration/60)}:${(duration%60).toString().padStart(2, '0')}` : 'Ringing...'}
              </p>
           </div>
         )}

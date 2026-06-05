@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Phone, PhoneOff, User, Maximize2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { endCallAction } from '@/app/actions/call-actions';
 import { cn } from '@/lib/utils';
 
 /**
@@ -59,7 +60,7 @@ export function GlobalCallOverlay() {
 
   const handleDecline = async () => {
     if (!incomingCall) return;
-    await supabase.from('calls').update({ status: 'ended' }).eq('id', incomingCall.id);
+    await endCallAction(incomingCall.id, 'Rejected');
     setIncomingCall(null);
   };
 
