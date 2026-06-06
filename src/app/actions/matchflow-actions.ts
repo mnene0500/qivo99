@@ -549,8 +549,27 @@ export async function requestWithdrawalAction(uid: string, diamonds: number, amo
   try {
     const { error: dErr } = await supabase.rpc("increment_diamonds", { p_user_id: uid, p_amount: -diamonds });
     if (dErr) throw dErr;
-    await supabase.from('withdrawals').insert({ user_id: uid, agency_id: agencyId, diamonds, amount_kes: amountKes, mpesa_number: mpesaNumber, status: 'pending', timestamp: Date.now() });
-    await supabase.from('diamond_history').insert({ user_id: uid, amount: -diamonds, type: 'withdrawal', description: `Payout Request: ${amountKes} KES`, timestamp: Date.now() });
+    
+    const { error } = await supabase.from('withdrawals').insert({ 
+      user_id: uid, 
+      agency_id: agencyId, 
+      diamonds, 
+      amount_kes: amountKes, 
+      mpesa_number: mpesaNumber, 
+      status: 'pending', 
+      timestamp: Date.now() 
+    });
+
+    if (error) throw error;
+
+    await supabase.from('diamond_history').insert({ 
+      user_id: uid, 
+      amount: -diamonds, 
+      type: 'withdrawal', 
+      description: `Payout Request: ${amountKes} KES`, 
+      timestamp: Date.now() 
+    });
+    
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };

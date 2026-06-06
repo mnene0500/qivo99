@@ -105,7 +105,7 @@ export default function AgencyManagePage() {
       const res = await updateWithdrawalStatusAction(requestId, status)
       if (res.success) {
         toast({ title: `Payout marked as ${status}` })
-        setWithdrawals(prev => prev.filter(w => (w as any).id !== requestId))
+        setWithdrawals(prev => prev.filter(w => w.id !== requestId))
       } else {
         toast({ variant: "destructive", title: "Error", description: res.error })
       }

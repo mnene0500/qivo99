@@ -41,7 +41,7 @@ export default function AgencyHistoryPage() {
 
     fetchWithdrawals()
 
-    // Real-time status updates
+    // Real-time status updates strictly filtered for current user
     const channel = supabase.channel(`member-payouts:${user.id}`)
       .on('postgres_changes', { 
         event: '*', 
@@ -111,7 +111,7 @@ function StatusBadge({ status }: { status: WithdrawalRequest['status'] }) {
     rejected: { icon: XCircle, text: 'Rejected', className: 'text-red-500 bg-red-50 border-red-100' }
   }
 
-  const config = configs[status]
+  const config = configs[status] || configs.pending;
   const Icon = config.icon
 
   return (
