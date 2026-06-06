@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useRef, use } from "react"
@@ -13,7 +12,7 @@ import { Button } from "@/components/ui/button"
 
 /**
  * @fileOverview Hardened Video/Voice Call Screen.
- * Fixed: Timer visibility, per-minute billing for all types, and camera switching.
+ * Optimized: Timer visibility, per-minute billing, and optimized audio track for voice calls.
  */
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
   const { chatId } = use(params)
@@ -145,7 +144,10 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
         client.on("user-left", () => { if (mounted.current) handleEndCall(false) })
 
-        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack().catch(e => {
+        // Audio Track Optimization for Voice Calls (Signaling to OS for Earpiece)
+        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+          encoderConfig: type === 'voice' ? "speech_standard" : "music_standard"
+        }).catch(e => {
           throw new Error("Microphone permission required.");
         });
         rtc.current.localAudioTrack = audioTrack;

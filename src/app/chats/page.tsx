@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, Suspense, useCallback, useRef } from "react"
@@ -12,7 +11,7 @@ import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
 import { clearChatAction, sendMessageAction, markChatAsReadAction, sendGiftAction } from "@/app/actions/matchflow-actions"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/dialog"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useBalance } from "@/lib/providers/BalanceProvider"
 import { startCallAction } from "@/app/actions/call-actions"
@@ -186,16 +185,19 @@ function ChatsContent() {
     const text = newMessage.trim();
     if (!text && !selectedImage) return;
 
+    // Proactive Economic Lock
+    const cost = selectedImage ? 30 : 15;
+    const isFree = !!(me?.is_admin || me?.is_coin_seller);
+    if (me?.gender === 'male' && !isFree && coins < cost) {
+      toast({ variant: "destructive", title: "Insufficient Coins", description: `Sharing ${selectedImage ? 'images' : 'messages'} costs ${cost} coins.` });
+      return;
+    }
+
     setIsSending(true);
     let finalImageUrl = undefined;
 
     try {
       if (selectedImage) {
-        if (coins < 30 && me?.gender === 'male' && !me?.is_admin && !me?.is_coin_seller) {
-           toast({ variant: "destructive", title: "Insufficient Coins", description: "Sharing images costs 30 coins." });
-           setIsSending(false);
-           return;
-        }
         const { blob } = base64ToBlob(selectedImage);
         finalImageUrl = await uploadPostPhoto(blob, currentUser.id, 'photos');
       }
@@ -225,6 +227,15 @@ function ChatsContent() {
 
   const handleCall = async (type: 'video' | 'voice') => {
     if (!currentUser?.id || !startWithId || !chatId || isBlocked) return;
+    
+    // Proactive call cost check
+    const cost = type === 'video' ? 150 : 70;
+    const isFree = !!(me?.is_admin || me?.is_coin_seller);
+    if (!isFree && coins < cost) {
+      toast({ variant: "destructive", title: "Insufficient Coins", description: `A ${type} call requires ${cost} coins per minute.` });
+      return;
+    }
+
     setIsSending(true);
     const callRes = await startCallAction(chatId, currentUser.id, startWithId, type);
     if (callRes.success) {
@@ -237,11 +248,19 @@ function ChatsContent() {
 
   const handleSendGift = async (g: typeof GIFTS[0]) => {
     if (!currentUser?.id || !startWithId || isSending || isBlocked) return;
-    if (coins < g.cost) { toast({ variant: "destructive", title: "Insufficient Coins" }); return; }
+    const isFree = !!(me?.is_admin || me?.is_coin_seller);
+    if (!isFree && coins < g.cost) { 
+      toast({ variant: "destructive", title: "Insufficient Coins", description: `The ${g.name} costs ${g.cost} coins.` }); 
+      return; 
+    }
     setIsSending(true);
     try {
       const res = await sendGiftAction(currentUser.id, startWithId, g.cost, g.name);
-      if (res.success) setLastGiftSent(g);
+      if (res.success) {
+        setLastGiftSent(g);
+      } else {
+        toast({ variant: "destructive", title: "Action Failed", description: res.error === 'insufficient_funds' ? "You need more coins." : "Network error." });
+      }
     } finally { setIsSending(false); }
   }
 
