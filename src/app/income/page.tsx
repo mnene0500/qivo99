@@ -7,7 +7,7 @@ import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ChevronLeft, Gem, History, Coins, ArrowRightLeft, Loader2, Sparkles } from "lucide-react"
+import { ChevronLeft, Gem, History, Coins, ArrowRightLeft, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { convertDiamondsToCoinsAction } from "@/app/actions/matchflow-actions"
 import { useBalance } from "@/lib/providers/BalanceProvider"
@@ -22,7 +22,9 @@ export default function IncomePage() {
   const [isProcessing, setIsProcessing] = useState(false)
 
   const diamondBalance = Number(globalDiamonds) || 0
-  const conversionRate = 0.09 
+  
+  // Rate updated from 0.09 to 0.07 as requested (90 coins -> 70 coins per 1k)
+  const conversionRate = 0.07 
   const minDiamonds = 1000
   const expectedCoins = Math.floor(Number(diamondsToConvert) * conversionRate)
 
@@ -50,7 +52,6 @@ export default function IncomePage() {
 
       <main className="flex-1 p-8 space-y-12">
         <div className="bg-black p-10 rounded-[3rem] shadow-2xl text-white relative overflow-hidden">
-          <Sparkles className="absolute -right-4 -top-4 w-24 h-24 text-white/10" />
           <div className="relative z-10 space-y-4">
             <p className="text-[11px] font-black uppercase tracking-[0.3em] opacity-40">Diamond Earnings</p>
             <div className="flex items-center gap-4"><Gem className="w-10 h-10 text-[#00A2FF] fill-current" /><h2 className="text-5xl font-black tracking-tighter">{diamondBalance.toFixed(0)}</h2></div>

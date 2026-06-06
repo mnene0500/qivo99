@@ -28,12 +28,13 @@ export default function AgencyHistoryPage() {
     if (!user?.id) return
     
     const fetchWithdrawals = async () => {
+      // Strictly only showing last 2 transactions as requested
       const { data } = await supabase
         .from('withdrawals')
         .select('*')
         .eq('user_id', user.id)
         .order('timestamp', { ascending: false })
-        .limit(50)
+        .limit(2)
       
       if (data) setWithdrawals(data as any)
       setLoading(false)
@@ -80,6 +81,9 @@ export default function AgencyHistoryPage() {
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
+            <div className="px-6 py-4 bg-amber-50/50 border-b border-amber-100/50">
+               <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest text-center">Only showing the 2 most recent transactions</p>
+            </div>
             {withdrawals.map((req) => (
               <div key={req.id} className="p-6 hover:bg-gray-50/50 transition-colors animate-in slide-in-from-bottom-2">
                 <div className="flex justify-between items-start mb-3">

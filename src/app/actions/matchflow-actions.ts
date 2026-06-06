@@ -639,6 +639,18 @@ export async function requestWithdrawalAction(uid: string, diamonds: number, amo
 
     if (error) throw error;
 
+    // Prune old records: Keep only the 2 most recent for this user
+    const { data: toPrune } = await supabase
+      .from('withdrawals')
+      .select('id')
+      .eq('user_id', uid)
+      .order('timestamp', { ascending: false })
+      .range(2, 50);
+
+    if (toPrune && toPrune.length > 0) {
+      await supabase.from('withdrawals').delete().in('id', toPrune.map(r => r.id));
+    }
+
     await supabase.from('diamond_history').insert({ 
       user_id: uid, 
       amount: -diamonds, 
