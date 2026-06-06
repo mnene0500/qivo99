@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 import { sendMysteryNoteAction } from "@/app/actions/matchflow-actions"
 import { cn } from "@/lib/utils"
 
-const RECIPIENT_OPTIONS = [2, 5, 10, 20, 50]
+const RECIPIENT_OPTIONS = [2, 3, 5, 10]
 const COST_PER_PERSON = 10
 
 export default function MysteryNotePage() {
@@ -20,7 +20,7 @@ export default function MysteryNotePage() {
   const { toast } = useToast()
 
   const [message, setMessage] = useState("")
-  const [recipientCount, setRecipientCount] = useState(10)
+  const [recipientCount, setRecipientCount] = useState(5)
   const [isSending, setIsSending] = useState(false)
   const [userCoins, setUserCoins] = useState<number | null>(null)
 
@@ -78,7 +78,7 @@ export default function MysteryNotePage() {
         toast({ title: "Blast Dispatched!", description: "Conversations have been started with chosen recipients." })
         router.push("/chats")
       } else {
-        toast({ variant: "destructive", title: "Deployment Error", description: res.error })
+        toast({ variant: "destructive", title: "Blast Failed", description: res.error })
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Signal Lost", description: "Please check your connection." })
@@ -104,13 +104,13 @@ export default function MysteryNotePage() {
         </div>
       </header>
 
-      <main className="flex-1 px-6 pt-4 pb-12 space-y-10 overflow-y-auto no-scrollbar relative z-10">
+      <main className="flex-1 px-6 pt-4 pb-12 space-y-10 overflow-y-auto no-scrollbar relative z-[60]">
         <div className="space-y-2 px-2 text-center">
           <div className="w-20 h-20 bg-white/10 backdrop-blur-3xl rounded-[2rem] border border-white/20 flex items-center justify-center mx-auto mb-6 shadow-2xl group active:scale-90 transition-transform">
              <Zap className="w-10 h-10 text-white fill-current group-hover:animate-pulse" />
           </div>
           <h1 className="text-4xl font-black text-white tracking-tighter leading-none uppercase italic">Message <span className="text-yellow-400">Blast</span></h1>
-          <p className="text-[10px] font-black text-white/40 tracking-[0.4em] uppercase">Simultaneous Global Transmission</p>
+          <p className="text-[10px] font-black text-white/40 tracking-[0.4em] uppercase">Targeted Global Transmission</p>
         </div>
 
         <div className="bg-white/10 backdrop-blur-3xl border border-white/20 rounded-[3.5rem] p-8 shadow-2xl space-y-10 relative overflow-hidden">
@@ -118,7 +118,7 @@ export default function MysteryNotePage() {
             <div className="flex justify-between items-end">
                <div className="space-y-1">
                  <h2 className="text-2xl font-black text-white leading-none">The Broadcast</h2>
-                 <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest">Type your transmission below</p>
+                 <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest">Sent only to opposite gender</p>
                </div>
                <div className="px-3 py-1 bg-yellow-400 rounded-lg shadow-lg rotate-3">
                  <span className="text-[10px] font-black text-black tracking-tight">{COST_PER_PERSON} <Coins className="inline w-3 h-3 mb-0.5" /> / User</span>
@@ -138,7 +138,7 @@ export default function MysteryNotePage() {
 
           <div className="space-y-8 relative z-20">
             <div className="space-y-4">
-              <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] text-center">Transmission Reach</p>
+              <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] text-center">Opposite Gender Reach</p>
               <div className="flex flex-wrap justify-center gap-3">
                 {RECIPIENT_OPTIONS.map(n => (
                   <button
@@ -192,7 +192,7 @@ export default function MysteryNotePage() {
       </main>
       
       <footer className="p-8 text-center">
-        <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.5em]">QIVO Global Broadcast Engine v2.0</p>
+        <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.5em]">QIVO Targeted Broadcast Engine v2.5</p>
       </footer>
     </div>
   )

@@ -226,11 +226,15 @@ export async function deleteUserCompletelyAction(targetUid: string) {
 
 export async function sendMysteryNoteAction(userId: string, text: string, recipientCount: number) {
   const supabase = getSupabaseAdmin();
-  const cost = recipientCount * 10;
+  const finalCount = Math.min(Number(recipientCount), 10);
+  const cost = finalCount * 10;
   const safeText = filterSensitiveContent(text);
   
   try {
-    const { data: sender } = await supabase.from('users').select('blocking, blocked_by').eq('uid', userId).single();
+    const { data: sender } = await supabase.from('users').select('gender, blocking, blocked_by').eq('uid', userId).single();
+    if (!sender) throw new Error("Sender not found");
+
+    const targetGender = sender.gender === 'male' ? 'female' : 'male';
     const blockedList = [...(sender?.blocking || []), ...(sender?.blocked_by || [])];
 
     const { data: balance } = await supabase.from('balances').select('coins').eq('user_id', userId).maybeSingle();
@@ -239,6 +243,7 @@ export async function sendMysteryNoteAction(userId: string, text: string, recipi
     let query = supabase.from('users')
       .select('uid')
       .neq('uid', userId)
+      .eq('gender', targetGender)
       .eq('onboarding_complete', true)
       .is('is_deleted', false);
     
@@ -246,17 +251,35 @@ export async function sendMysteryNoteAction(userId: string, text: string, recipi
       query = query.not('uid', 'in', `(${blockedList.join(',')})`);
     }
 
-    const { data: recipients } = await query.limit(recipientCount);
+    const { data: recipients } = await query.limit(finalCount);
 
-    if (recipients && recipients.length > 0) {
-      await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -cost });
-      
-      for (const r of recipients) {
-        const chatId = `direct_${[userId, r.uid].sort()[0]}_${[userId, r.uid].sort()[1]}`;
-        await supabase.from('chats').upsert({ id: chatId, last_message: safeText.slice(0, 100), last_message_at: Date.now(), participant_ids: [userId, r.uid], last_sender_id: userId, updated_at: new Date().toISOString() });
-        await supabase.from('messages').insert({ chat_id: chatId, sender_id: userId, text: safeText, timestamp: Date.now() });
-      }
+    if (!recipients || recipients.length < finalCount) {
+      return { success: false, error: "Not enough users of the opposite gender available at this moment." };
     }
+
+    await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -cost });
+    
+    for (const r of recipients) {
+      const chatId = `direct_${[userId, r.uid].sort()[0]}_${[userId, r.uid].sort()[1]}`;
+      await supabase.from('chats').upsert({ 
+        id: chatId, 
+        last_message: safeText.slice(0, 100), 
+        last_message_at: Date.now(), 
+        participant_ids: [userId, r.uid], 
+        last_sender_id: userId, 
+        updated_at: new Date().toISOString() 
+      });
+      await supabase.from('messages').insert({ chat_id: chatId, sender_id: userId, text: safeText, timestamp: Date.now() });
+    }
+
+    await supabase.from('coin_history').insert({
+      user_id: userId,
+      amount: -cost,
+      type: 'blast',
+      description: `Message Blast to ${finalCount} users`,
+      timestamp: Date.now()
+    });
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -533,4 +556,3 @@ export async function requestWithdrawalAction(uid: string, diamonds: number, amo
     return { success: false, error: err.message };
   }
 }
-
