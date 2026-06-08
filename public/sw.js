@@ -1,52 +1,42 @@
 
 /**
- * QIVO Production Service Worker
- * Handles background push notifications and app focus logic.
+ * @fileOverview QIVO Background Service Worker.
+ * Handles background push notifications and deep linking.
  */
 
 self.addEventListener('push', function(event) {
-  if (!event.data) return;
-
-  try {
-    const data = event.data.json();
+  if (event.data) {
+    const payload = event.data.json();
     const options = {
-      body: data.body,
+      body: payload.body,
       icon: '/icon-192.png',
       badge: '/notification.png',
       vibrate: [100, 50, 100],
       data: {
-        url: data.url || '/'
-      },
-      actions: [
-        { action: 'open', title: 'View Now' }
-      ]
+        url: payload.url || '/'
+      }
     };
 
     event.waitUntil(
-      self.registration.showNotification(data.title, options)
+      self.registration.showNotification(payload.title, options)
     );
-  } catch (err) {
-    console.error("Push parse error:", err);
   }
 });
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  
-  const targetUrl = event.notification.data.url;
+  const urlToOpen = event.notification.data.url;
 
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then(windowClients => {
-      // Check if there is already a window open with this URL
-      for (let i = 0; i < windowClients.length; i++) {
-        const client = windowClients[i];
-        if (client.url.includes(targetUrl) && 'focus' in client) {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (let i = 0; i < clientList.length; i++) {
+        const client = clientList[i];
+        if (client.url.includes(urlToOpen) && 'focus' in client) {
           return client.focus();
         }
       }
-      // If not, open a new window
       if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
+        return clients.openWindow(urlToOpen);
       }
     })
   );
