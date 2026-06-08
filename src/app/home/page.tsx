@@ -125,28 +125,28 @@ export default function HomePage() {
 
       {/* TOP ACTION CARDS WITH QIVO STAMP */}
       <div className="px-4 grid grid-cols-2 gap-3 py-6 bg-white relative overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[180px] font-black text-black/[0.02] pointer-events-none select-none italic tracking-tighter z-0">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[140px] font-black text-black/[0.02] pointer-events-none select-none italic tracking-tighter z-0">
           QIVO
         </div>
 
         <button 
           onClick={() => router.push('/mystery-note')} 
-          className="relative z-10 aspect-square bg-gradient-to-br from-blue-600 to-blue-500 rounded-[2rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all shadow-xl shadow-blue-100"
+          className="relative z-10 aspect-square bg-gradient-to-br from-blue-600 to-blue-500 rounded-[1.5rem] p-4 flex flex-col items-start justify-between text-white active:scale-95 transition-all shadow-xl shadow-blue-100"
         >
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-            <FileText className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+            <FileText className="w-4 h-4 text-white" />
           </div>
-          <p className="text-sm font-black leading-tight text-left uppercase tracking-tight">Message<br/>blast</p>
+          <p className="text-xs font-black leading-tight text-left uppercase tracking-tight">Message<br/>blast</p>
         </button>
 
         <button 
           onClick={() => router.push('/tasks')} 
-          className="relative z-10 aspect-square bg-gradient-to-br from-purple-600 to-fuchsia-500 rounded-[2rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all shadow-xl shadow-purple-100"
+          className="relative z-10 aspect-square bg-gradient-to-br from-purple-600 to-fuchsia-500 rounded-[1.5rem] p-4 flex flex-col items-start justify-between text-white active:scale-95 transition-all shadow-xl shadow-purple-100"
         >
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-            <Target className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+            <Target className="w-4 h-4 text-white" />
           </div>
-          <p className="text-sm font-black leading-tight text-left uppercase tracking-tight">Task<br/>center</p>
+          <p className="text-xs font-black leading-tight text-left uppercase tracking-tight">Task<br/>center</p>
         </button>
       </div>
 
@@ -159,7 +159,7 @@ export default function HomePage() {
                 key={t} 
                 onClick={() => { setPage(page => 0); setUsers([]); setActiveTab(t as any); }} 
                 className={cn(
-                  "text-xs font-black transition-all relative py-2 uppercase tracking-widest", 
+                  "text-[10px] font-black transition-all relative py-2 uppercase tracking-widest", 
                   activeTab === t ? "text-[#00A2FF]" : "text-gray-300"
                 )}
               >
@@ -184,7 +184,7 @@ export default function HomePage() {
       <main className="px-3 pt-4 pb-24">
         {loading && users.length === 0 ? (
           <div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="aspect-[3/4] bg-gray-50 rounded-[1.8rem] animate-pulse" />)}
+            {[1,2,3,4].map(i => <div key={i} className="aspect-[3/4] bg-gray-50 rounded-[1.2rem] animate-pulse" />)}
           </div>
         ) : users.length === 0 ? (
           <div className="py-40 text-center opacity-40 uppercase font-black text-[10px] tracking-widest">No profiles found</div>
@@ -193,26 +193,26 @@ export default function HomePage() {
             {users.map((u) => {
               if (!u) return null;
               return (
-                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[3/4] rounded-[1.8rem] shadow-md active:scale-[0.98] transition-all" onClick={() => router.push(`/users/${u.uid}`)}>
+                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[3/4] rounded-[1.2rem] shadow-md active:scale-[0.98] transition-all" onClick={() => router.push(`/users/${u.uid}`)}>
                   <Image src={u.photo_url} alt={u.name} fill className="object-cover" sizes="50vw" priority />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
                   
-                  <div className="absolute top-3 right-3">
-                    <div className="bg-black/20 backdrop-blur-md text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full border border-white/10">
+                  <div className="absolute top-2 right-2">
+                    <div className="bg-black/20 backdrop-blur-md text-white text-[7px] font-black uppercase px-2 py-1 rounded-full border border-white/10">
                       CHAT
                     </div>
                   </div>
 
-                  <div className="absolute bottom-3 left-4 right-4 text-white">
-                    <div className="flex items-center gap-1 mb-1">
-                      <h4 className="font-black text-base truncate leading-none tracking-tight">{u.name}</h4>
-                      {u.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white" />}
+                  <div className="absolute bottom-3 left-3 right-3 text-white">
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <h4 className="font-black text-sm truncate leading-none tracking-tight">{u.name}</h4>
+                      {u.is_verified && <BadgeCheck className="w-3 h-3 text-[#00A2FF] fill-white" />}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="bg-[#00D1FF] text-white px-1.5 py-0.5 rounded-md flex items-center justify-center min-w-[22px]">
-                        <span className="text-[9px] font-black">{calculateAge(u.dob)}</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="bg-[#00D1FF] text-white px-1 py-0.5 rounded flex items-center justify-center min-w-[18px]">
+                        <span className="text-[8px] font-black">{calculateAge(u.dob)}</span>
                       </div>
-                      <span className="text-[9px] font-bold opacity-70 uppercase truncate tracking-tighter">{u.country}</span>
+                      <span className="text-[8px] font-bold opacity-70 uppercase truncate tracking-tighter">{u.country}</span>
                     </div>
                   </div>
                 </Card>
@@ -222,7 +222,7 @@ export default function HomePage() {
         )}
         {(loadingMore || (loading && users.length > 0)) && (
           <div className="py-10 flex justify-center w-full">
-            <Loader2 className="w-5 h-5 animate-spin text-[#00A2FF]" />
+            <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" />
           </div>
         )}
       </main>
