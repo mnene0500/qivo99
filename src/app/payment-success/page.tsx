@@ -17,8 +17,35 @@ function PaymentSuccessContent() {
 
   const trackingId = searchParams.get('OrderTrackingId')
   const merchantRef = searchParams.get('OrderMerchantReference')
+  const source = searchParams.get('source')
+  const checkoutSessionId = searchParams.get('session_id')
 
   const verify = useCallback(async () => {
+    if (source === 'stripe') {
+      if (!checkoutSessionId) {
+        setStatus('error')
+        return
+      }
+      try {
+        const response = await fetch(`/api/stripe/verify-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: checkoutSessionId })
+        })
+        const res = await response.json()
+        if (res.success) {
+          setStatus('success')
+          setCoinsAdded(res.coins || 0)
+          toast({ title: 'Purchase Confirmed!', description: 'Coins have been added to your wallet.' })
+        } else {
+          setStatus('error')
+        }
+      } catch (err) {
+        setStatus('error')
+      }
+      return
+    }
+
     if (!trackingId || !merchantRef) {
       setStatus('error')
       return
@@ -29,14 +56,14 @@ function PaymentSuccessContent() {
       if (res.success) {
         setStatus('success')
         setCoinsAdded(res.coins || 0)
-        toast({ title: "Purchase Confirmed!", description: "Coins have been added to your wallet." })
+        toast({ title: 'Purchase Confirmed!', description: 'Coins have been added to your wallet.' })
       } else {
         setStatus('error')
       }
     } catch (err) {
       setStatus('error')
     }
-  }, [trackingId, merchantRef, toast])
+  }, [checkoutSessionId, merchantRef, source, trackingId, toast])
 
   useEffect(() => {
     verify()

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Coins, ShieldCheck, Loader2, MessageSquare, ExternalLink, Zap, Check, History, Globe, ChevronDown, Star, Gift } from "lucide-react"
+import { ChevronLeft, Coins, ShieldCheck, Loader2, MessageSquare, ExternalLink, Zap, Check, History, Globe, ChevronDown, Star, Gift, CreditCard } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { useToast } from "@/hooks/use-toast"
 import { initiatePesaPalPayment } from "@/app/actions/payment-actions"
@@ -40,6 +40,7 @@ export default function RechargePage() {
   
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isStripeProcessing, setIsStripeProcessing] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [manualCountry, setManualCountry] = useState<string | null>(null)
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false)
@@ -72,16 +73,47 @@ export default function RechargePage() {
   const selectedPackage = PACKAGES.find(p => p.id === selectedId)
   const isPesaPalCountry = !['Nigeria', 'Ghana', 'South Africa'].includes(currentCountry)
 
-  const handleRecharge = async () => {
+  const handlePesaPalRecharge = async () => {
     if (!user) { router.push("/auth"); return; }
     if (!selectedPackage) return;
-    if (!isPesaPalCountry) { router.push(`/coin-sellers?selectedPackage=${selectedPackage.label}&amount=${selectedPackage.coins}`); return; }
+    if (!isPesaPalCountry) {
+      toast({ variant: "destructive", title: "PesaPal unavailable", description: "PesaPal is not supported in your country. Use Coinsellers or Google Pay instead." });
+      return;
+    }
     setIsProcessing(true)
     try {
       const res = await initiatePesaPalPayment(user.id, selectedPackage.priceKes, selectedPackage.coins)
       if (res.success && res.redirect_url) window.location.href = res.redirect_url
       else toast({ variant: "destructive", title: "Gateway Error" })
     } finally { setIsProcessing(false) }
+  }
+
+  const handleGooglePayRecharge = async () => {
+    if (!user) { router.push("/auth"); return; }
+    if (!selectedPackage) return;
+    setIsStripeProcessing(true)
+    try {
+      const response = await fetch("/api/stripe/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          amount: selectedPackage.priceKes,
+          coins: selectedPackage.coins,
+          packageId: selectedPackage.id
+        })
+      })
+      const data = await response.json()
+      if (data.success && data.url) {
+        window.location.href = data.url
+      } else {
+        toast({ variant: "destructive", title: "Gateway Error", description: data.error || "Unable to start Google Pay." })
+      }
+    } catch (error) {
+      toast({ variant: "destructive", title: "Network Error", description: "Unable to reach payment provider." })
+    } finally {
+      setIsStripeProcessing(false)
+    }
   }
 
   const formatPrice = (kes: number) => `${currencyInfo.code} ${(kes * currencyInfo.rate).toFixed(0)}`
@@ -144,9 +176,22 @@ export default function RechargePage() {
       </main>
 
       <footer className="fixed bottom-0 inset-x-0 p-6 bg-white/95 backdrop-blur-xl border-t border-black/5 z-[80] pb-[calc(env(safe-area-inset-bottom,24px)+8px)] shadow-[0_-10px_30px_rgba(0,0,0,0.04)]">
-        <Button onClick={handleRecharge} disabled={isProcessing || !selectedId} className="w-full h-16 rounded-full bg-[#8B0000] text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all">
-          {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <div className="flex items-center gap-2"><Zap className="w-4 h-4 fill-current text-yellow-300" /> Recharge {selectedPackage ? formatPrice(selectedPackage.priceKes) : ""}</div>}
-        </Button>
+        <div className="space-y-3">
+          <Button onClick={handlePesaPalRecharge} disabled={isProcessing || !selectedId} className="w-full h-16 rounded-full bg-[#8B0000] text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all">
+            {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <div className="flex items-center gap-2"><Zap className="w-4 h-4 fill-current text-yellow-300" /> Pay with PesaPal</div>}
+          </Button>
+          <Button onClick={handleGooglePayRecharge} disabled={isStripeProcessing || !selectedId} className="w-full h-16 rounded-full border border-black bg-white text-black font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all">
+            {isStripeProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <div className="flex items-center gap-2"><CreditCard className="w-5 h-5" /> Pay with Google Pay</div>}
+          </Button>
+          <Button onClick={() => router.push(selectedPackage ? `/coin-sellers?selectedPackage=${selectedPackage.label}&amount=${selectedPackage.coins}` : '/coin-sellers')} className="w-full h-16 rounded-full bg-black text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all">
+            <div className="flex items-center gap-2"><MessageSquare className="w-4 h-4 fill-current text-yellow-300" /> Pay with Coinseller</div>
+          </Button>
+        </div>
+        {!isPesaPalCountry && selectedPackage && (
+          <p className="mt-3 text-center text-[10px] uppercase tracking-[0.2em] text-gray-400">
+            PesaPal may not work in your country. Use Google Pay or Coinseller instead.
+          </p>
+        )}
       </footer>
     </div>
   )
