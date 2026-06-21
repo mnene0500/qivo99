@@ -1,10 +1,12 @@
-
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "com.qivo.chat",
-    "sha256_cert_fingerprints":
-    ["79:C5:F1:0D:2A:85:B8:37:9E:57:08:97:48:9B:D3:61:64:A2:9C:23:60:1A:BB:D2:D0:BE:16:DF:A4:D7:26:C7"]
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.qivo.chat",
+      "sha256_cert_fingerprints": [
+        "79:C5:F1:0D:2A:85:B8:37:9E:57:08:97:48:9B:D3:61:64:A2:9C:23:60:1A:BB:D2:D0:BE:16:DF:A4:D7:26:C7"
+      ]
+    }
   }
-}]
+]
