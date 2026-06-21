@@ -3,7 +3,7 @@
   "host": "qivo10.vercel.app",
   "name": "QIVO",
   "launcherName": "QIVO",
-  "display": "standalone",
+  "display": "fullscreen",
   "themeColor": "#8B0000",
   "themeColorDark": "#000000",
   "navigationColor": "#000000",
