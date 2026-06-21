@@ -1,0 +1,4 @@
+#Sun Jun 21 16:24:15 UTC 2026
+base.0=/home/user/qivo1/app/build/intermediates/dex/release/minifyReleaseWithR8/classes.dex
+renamed.0=classes.dex
+path.0=classes.dex

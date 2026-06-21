@@ -1,0 +1,20 @@
+{
+  "name": "QIVO",
+  "short_name": "QIVO",
+  "start_url": "https://qivo10.vercel.app/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#8B0000",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

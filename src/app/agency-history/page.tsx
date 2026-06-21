@@ -46,6 +46,7 @@ export default function AgencyHistoryPage() {
     const channel = supabase.channel(`member-payouts:${user.id}`)
       .on('postgres_changes', { 
         event: '*', 
+        schema: 'public',
         table: 'withdrawals', 
         filter: `user_id=eq.${user.id}` 
       }, () => fetchWithdrawals())

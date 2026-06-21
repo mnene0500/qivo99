@@ -7,6 +7,7 @@
   packages = [
     pkgs.nodejs_22
     pkgs.zulu
+    pkgs.android-sdk
   ];
   # Sets environment variables in the workspace
   env = {};
