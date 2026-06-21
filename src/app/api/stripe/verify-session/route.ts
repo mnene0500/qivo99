@@ -54,13 +54,13 @@ export async function POST(request: Request) {
         user_id: userId,
         amount,
         coins,
-        payment_method: "Google Pay"
+        payment_method: "Stripe"
       }),
-      supabase.from("coin_history").insert({
+      supabase.from('coin_history').insert({
         user_id: userId,
         amount: coins,
         type: "purchase",
-        description: `Stripe/Google Pay Top-up: ${amount} KES`,
+        description: `Stripe Top-up: ${amount} KES`,
         timestamp: Date.now()
       }),
       supabase.from("pending_payments").update({ status: "completed" }).eq("order_id", sessionId)
